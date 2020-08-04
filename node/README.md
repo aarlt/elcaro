@@ -23,5 +23,5 @@ Here `fd8a7e1f2cc1` is the `${IMAGE_ID}`.
 ## start dockered node
 
 ```bash
-➜ docker run -it ${IMAGE_ID}
+➜ docker run --rm -it ${IMAGE_ID}
 ```
