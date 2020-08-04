@@ -1,6 +1,0 @@
-[submodule "docker/go-ipfs"]
-	path = docker/go-ipfs
-	url = git@github.com:ipfs/go-ipfs.git
-[submodule "docker/go-ethereum"]
-	path = docker/go-ethereum
-	url = https://github.com/ethereum/go-ethereum
