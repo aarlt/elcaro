@@ -11,7 +11,6 @@ import urwid.raw_display
 
 def handle_event(event):
     # print(event)
-    # and whatever
     return
 
 

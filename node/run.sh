@@ -13,6 +13,6 @@ else
        docker build -t elcaro:local .
     fi
 fi
-sha256sum ${NODE_ROOT}/Dockerfile > Dockerfile.sha256
+sha256sum ${NODE_ROOT}/Dockerfile ${NODE_ROOT}/src/main.py ${NODE_ROOT}/src/requirements.txt ${NODE_ROOT}/init/* > Dockerfile.sha256
 
 docker run --rm -it -v ${NODE_ROOT}/data:/data elcaro:local $@
