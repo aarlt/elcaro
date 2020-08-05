@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from web3 import Web3
 from passlib.hash import argon2
 import getpass
