@@ -17,7 +17,7 @@ RUN chmod 0755 /usr/local/bin/entrypoint.sh
 
 COPY --from=builder /usr/local/lib/python3.8/site-packages /usr/local/lib/python3.8/site-packages
 
-RUN apk add go-ipfs geth libffi su-exec tini-static openssl lxc docker bash
+RUN apk add go-ipfs geth libffi su-exec tini-static openssl docker bash
 
 ENV IPFS_PATH /data/ipfs
 ENV GETH_PATH /data/geth
