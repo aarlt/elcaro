@@ -1,12 +1,12 @@
 FROM python:alpine AS builder
 
 RUN apk add build-base libffi-dev openssl-dev ca-certificates
-RUN pip install --upgrade pip
+RUN pip3 install --upgrade pip
 
 ADD src /elcaro
-RUN pip install -r /elcaro/requirements.txt
+RUN pip3 install -r /elcaro/requirements.txt
 
-RUN pip install pylxd
+RUN pip3 install pylxd
 
 FROM python:alpine
 

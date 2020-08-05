@@ -5,6 +5,9 @@ import hashlib
 from threading import Thread
 import time
 
+import urwid
+import urwid.raw_display
+
 
 def handle_event(event):
     # print(event)
@@ -12,7 +15,7 @@ def handle_event(event):
     return
 
 
-def log_loop(web3,event_filter, poll_interval):
+def log_loop(web3, event_filter, poll_interval):
     while True:
         print(web3.eth.blockNumber)
         for event in event_filter.get_new_entries():
