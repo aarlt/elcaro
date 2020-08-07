@@ -17,5 +17,3 @@ kill ${GETH}
 
 while [ -e /proc/${IPFS} ]; do sleep 1; done
 while [ -e /proc/${GETH} ]; do sleep 1; done
-
-echo
