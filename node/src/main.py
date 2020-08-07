@@ -6,6 +6,7 @@ from passlib.hash import argon2
 import getpass
 import hashlib
 import argparse
+import json
 
 elcaro_logo = u'         .__\n' \
               '    ____ |  |   ____ _____ _______  ____\n' \
@@ -29,7 +30,11 @@ class ViewTerminal(urwid.Terminal):
 class SidePanel(urwid.WidgetWrap):
     def __init__(self, w3, config, account):
         self.w3 = w3
+        self.contract_json = None
+        with open(config.elcaro_json, 'r') as json_file:
+            self.contract_json = json.load(json_file)
         self.account = account
+        self.contract = w3.eth.contract(address=config.contract, abi=self.contract_json["abi"])
         self.logo = urwid.Text(elcaro_logo)
         self.network_chain_id = urwid.Text("", align=urwid.CENTER)
         self.network_peers = urwid.Text("", align=urwid.CENTER)
@@ -44,7 +49,6 @@ class SidePanel(urwid.WidgetWrap):
         self.node_balance = urwid.Text("?Ξ", align=urwid.CENTER)
         self.register_unregister_button = urwid.Button("Register Node", self.register_unregister)
         self.exit_button = urwid.Button("Shutdown Node", self.shutdown_node)
-
         self.pile = urwid.Pile([
             self.logo,
             urwid.Text(""),
@@ -101,24 +105,21 @@ class SidePanel(urwid.WidgetWrap):
             self.network_block.set_text("?")
             self.network_peers.set_text("?")
             self.network_chain_id.set_text("?")
-            self.node_balance.set_text("?Ξ")
+            self.node_balance.set_text("?")
 
     def shutdown_node(self, button):
         raise urwid.ExitMainLoop()
 
     def register_unregister(self, button):
-        try:
-            self.node_balance.set_text(
-                str(self.w3.fromWei(self.w3.eth.getBalance(self.account.address), "ether")) + "Ξ")
-            transaction = {'to': self.contract_address.text, 'from': self.account.address, 'value': 10000,
-                           'gas': 25000,
-                           'gasPrice': 20000000000,
-                           'nonce': 1,
-                           'chainId': self.w3.eth.chainId};
-            signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
-            self.w3.eth.sendRawTransaction(signed.rawTransaction)
-        except:
-            return
+        nonce = self.w3.eth.getTransactionCount(self.account.address)
+        transaction = self.contract.functions.register().buildTransaction({
+            'chainId': self.w3.eth.chainId,
+            'gas': 70000,
+            'gasPrice': w3.toWei('1', 'gwei'),
+            'nonce': nonce,
+        })
+        signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
+        self.w3.eth.sendRawTransaction(signed.rawTransaction)
 
 
 class Display:
@@ -224,6 +225,7 @@ if '__main__' == __name__:
                         default="0x0000000000000000000000000000000000000000")
     parser.add_argument('--geth-log', help='path to geth logfile', default="/data/geth/geth.log")
     parser.add_argument('--ipfs-log', help='path to ipfs logfile')
+    parser.add_argument('--elcaro-json', help='path elcaro standard-json compiler artefact')
 
     w3 = Web3(Web3.WebsocketProvider('ws://127.0.0.1:8545'))
     if not w3.isConnected():
