@@ -168,8 +168,6 @@ class Display:
         self.account = self.w3.eth.account.from_key(m.digest())
         self.status = urwid.Text("STATUS")
         self.status = urwid.AttrWrap(self.status, 'footer')
-        if config.geth_log is None:
-            config.geth_log = "/data/geth/geth.log"
         self.geth_log = ViewTerminal(['tail', '-f', config.geth_log], encoding='utf-8')
         self.side_panel = SidePanel(self.w3, config, self.account)
         self.screen = urwid.Columns(
@@ -224,7 +222,7 @@ if '__main__' == __name__:
     parser = argparse.ArgumentParser(description='elcaro oracle node.')
     parser.add_argument('--contract', help='contract address to an elcaro contract',
                         default="0x0000000000000000000000000000000000000000")
-    parser.add_argument('--geth-log', help='path to geth logfile')
+    parser.add_argument('--geth-log', help='path to geth logfile', default="/data/geth/geth.log")
     parser.add_argument('--ipfs-log', help='path to ipfs logfile')
 
     w3 = Web3(Web3.WebsocketProvider('ws://127.0.0.1:8545'))
