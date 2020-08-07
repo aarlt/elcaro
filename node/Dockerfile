@@ -6,8 +6,6 @@ RUN pip3 install --upgrade pip
 ADD src /elcaro
 RUN pip3 install -r /elcaro/requirements.txt
 
-RUN pip3 install pylxd
-
 FROM python:alpine
 
 COPY --from=0 /elcaro /elcaro

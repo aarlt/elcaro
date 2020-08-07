@@ -3,7 +3,8 @@
 NODE_ROOT=$(cd $(dirname "$0}") && pwd)
 cd ${NODE_ROOT}
 
-mkdir -p ${NODE_ROOT}/data
+mkdir -p ${NODE_ROOT}/data/ipfs
+mkdir -p ${NODE_ROOT}/data/geth
 
 if [ ! -f ${NODE_ROOT}/Dockerfile.sha256 ] ; then
     docker build -t elcaro:local .
@@ -13,6 +14,6 @@ else
        docker build -t elcaro:local .
     fi
 fi
-sha256sum ${NODE_ROOT}/Dockerfile ${NODE_ROOT}/src/main.py ${NODE_ROOT}/src/requirements.txt ${NODE_ROOT}/init/* > Dockerfile.sha256
+sha256sum ${NODE_ROOT}/Dockerfile ${NODE_ROOT}/src/main.py ${NODE_ROOT}/src/executor.py ${NODE_ROOT}/src/requirements.txt ${NODE_ROOT}/init/* > Dockerfile.sha256
 
 docker run --rm -it -v ${NODE_ROOT}/data:/data elcaro:local $@
