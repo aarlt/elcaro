@@ -16,4 +16,9 @@ else
 fi
 sha256sum ${NODE_ROOT}/Dockerfile ${NODE_ROOT}/src/main.py ${NODE_ROOT}/src/executor.py ${NODE_ROOT}/src/requirements.txt ${NODE_ROOT}/init/* > Dockerfile.sha256
 
+if [ "$1" == "--build-only" ]; then
+    exit 0
+fi
+
 docker run --rm -it -v ${NODE_ROOT}/data:/data elcaro:local $@
+
