@@ -1,5 +1,3 @@
-pragma solidity ^0.6.12;
-
 /* 
 Hitchens Order Statistics Tree v0.98
 
@@ -36,45 +34,7 @@ THIS SOFTWARE IS NOT TESTED OR AUDITED. DO NOT USE FOR PRODUCTION.
 */
 
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.6.12;
-
-interface OwnedInterface {
-    function getOwner() external view returns(address owner);
-    function changeOwner(address newOwner) external returns (bool success);
-}
-
-contract Owned is OwnedInterface {
-
-    address private contractOwner;
-
-    event LogOwnerChanged(
-        address newOwner);
-
-    modifier onlyOwner {
-        require(msg.sender == contractOwner);
-        _;
-    }
-
-    constructor() public {
-        contractOwner = msg.sender;
-    }
-
-    function getOwner() public override view returns(address owner) {
-        return contractOwner;
-    }
-
-    function changeOwner(address newOwner)
-        public override
-        onlyOwner
-        returns(bool success)
-    {
-        require(newOwner != address(0));
-        emit LogOwnerChanged(newOwner);
-        contractOwner = newOwner;
-        return true;
-    }
-}
-
+pragma solidity ^0.7.0;
 
 library HitchensOrderStatisticsTreeLib {
     uint private constant EMPTY = 0;
@@ -532,6 +492,8 @@ https://github.com/bokkypoobah/BokkyPooBahsRedBlackTreeLibrary
 THIS SOFTWARE IS NOT TESTED OR AUDITED. DO NOT USE FOR PRODUCTION.
 */
 
+import "./Owned.sol";
+
 contract HitchensOrderStatisticsTree is Owned {
     using HitchensOrderStatisticsTreeLib for HitchensOrderStatisticsTreeLib.Tree;
 
@@ -539,7 +501,7 @@ contract HitchensOrderStatisticsTree is Owned {
 
     event Log(string action, bytes32 key, uint value);
 
-    constructor() public {
+    constructor() {
     }
     function treeRootNode() public view returns (uint _value) {
         _value = tree.root;
