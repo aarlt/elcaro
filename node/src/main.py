@@ -144,12 +144,9 @@ class Display:
         ('title', 'black,bold', 'light gray')
     ]
 
-    def __init__(self, config):
+    def __init__(self, config, w3):
         urwid.set_encoding('utf8')
-        self.w3 = Web3(Web3.WebsocketProvider('ws://127.0.0.1:8545'))
-        if not self.w3.isConnected():
-            print("not connected.")
-            exit(1)
+        self.w3 = w3
 
         print("\n"
               + elcaro_logo_centered +
@@ -225,8 +222,14 @@ class Display:
 
 if '__main__' == __name__:
     parser = argparse.ArgumentParser(description='elcaro oracle node.')
-    parser.add_argument('--contract', help='contract address to an elcaro contract')
+    parser.add_argument('--contract', help='contract address to an elcaro contract',
+                        default="0x0000000000000000000000000000000000000000")
     parser.add_argument('--geth-log', help='path to geth logfile')
     parser.add_argument('--ipfs-log', help='path to ipfs logfile')
 
-    Display(parser.parse_args()).main()
+    w3 = Web3(Web3.WebsocketProvider('ws://127.0.0.1:8545'))
+    if not w3.isConnected():
+        print("error: could not connect to geth node @ ws://127.0.0.1:8545. aborting.")
+        exit(1)
+
+    Display(parser.parse_args(), w3).main()
