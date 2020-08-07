@@ -151,7 +151,8 @@ class Display:
             print("not connected.")
             exit(1)
 
-        print(elcaro_logo_centered +
+        print("\n"
+              + elcaro_logo_centered +
               "\n\n"
               " !! THIS IS HIGHLY EXPERIMENTAL SOFTWARE AND TO BE USED AT YOUR OWN RISK !!\n"
               "\n"
