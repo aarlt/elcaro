@@ -1,5 +1,8 @@
 #!/bin/sh
 
+mkdir -p ${NODE_ROOT}/data/ipfs
+mkdir -p ${NODE_ROOT}/data/geth
+
 if [ ! -f  /data/ipfs/datastore_spec ]; then
     /usr/bin/ipfs init > /dev/null
 fi

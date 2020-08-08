@@ -3,3 +3,4 @@
 !init/*
 !src/*.py
 !src/*.txt
+!contracts/*

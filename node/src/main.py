@@ -46,7 +46,7 @@ class SidePanel(urwid.WidgetWrap):
         self.node_address = urwid.Text(self.account.address, align=urwid.CENTER)
         self.node_requests = urwid.Text("?", align=urwid.CENTER)
         self.node_responses = urwid.Text("?", align=urwid.CENTER)
-        self.node_balance = urwid.Text("?Ξ", align=urwid.CENTER)
+        self.node_balance = urwid.Text("?", align=urwid.CENTER)
         self.register_unregister_button = urwid.Button("Register Node", self.register_unregister)
         self.exit_button = urwid.Button("Shutdown Node", self.shutdown_node)
         self.pile = urwid.Pile([
@@ -225,7 +225,8 @@ if '__main__' == __name__:
                         default="0x0000000000000000000000000000000000000000")
     parser.add_argument('--geth-log', help='path to geth logfile', default="/data/geth/geth.log")
     parser.add_argument('--ipfs-log', help='path to ipfs logfile')
-    parser.add_argument('--elcaro-json', help='path elcaro standard-json compiler artefact')
+    parser.add_argument('--elcaro-json', help='path elcaro standard-json compiler artefact',
+                        default="/elcaro/contracts/Elcaro.json")
 
     w3 = Web3(Web3.WebsocketProvider('ws://127.0.0.1:8545'))
     if not w3.isConnected():

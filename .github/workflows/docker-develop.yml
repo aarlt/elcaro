@@ -17,9 +17,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+
+      - name : Dependencies
+        run: |
+          sudo apt update
+          sudo apt install nodejs npm
+          npm config set prefix ~/.local
+          npm install -g truffle
+
       - name: Build image
         run: |
-          node/elcaro --build-only
+          PATH="${HOME}/.local/bin:$PATH" node/elcaro --build-only
 
       - name: Push image
         run: |
