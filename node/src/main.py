@@ -36,9 +36,9 @@ class SidePanel(urwid.WidgetWrap):
         self.account = account
         self.contract = w3.eth.contract(address=config.contract, abi=self.contract_json["abi"])
         self.logo = urwid.Text(elcaro_logo)
-        self.network_chain_id = urwid.Text("", align=urwid.CENTER)
-        self.network_peers = urwid.Text("", align=urwid.CENTER)
-        self.network_block = urwid.Text("", align=urwid.CENTER)
+        self.network_chain_id = urwid.Text("?", align=urwid.CENTER)
+        self.network_peers = urwid.Text("?", align=urwid.CENTER)
+        self.network_block = urwid.Text("?", align=urwid.CENTER)
         self.active_nodes = urwid.Text("?", align=urwid.CENTER)
         self.contract_address = urwid.Text(config.contract, align=urwid.CENTER)
         self.contract_requests = urwid.Text("?", align=urwid.CENTER)
@@ -95,17 +95,23 @@ class SidePanel(urwid.WidgetWrap):
         self.__super.__init__(urwid.AttrWrap(fill, 'chars'))
 
     def refresh(self):
-        try:
-            self.network_block.set_text("#" + str(self.w3.eth.blockNumber))
-            self.network_peers.set_text(str(self.w3.net.peer_count))
-            self.network_chain_id.set_text(str(self.w3.eth.chainId))
-            self.node_balance.set_text(
-                str(self.w3.fromWei(self.w3.eth.getBalance(self.account.address), "ether")) + "Ξ")
-        except:
+        if self.w3.eth.syncing or self.w3.net.peer_count == 0:
             self.network_block.set_text("?")
             self.network_peers.set_text("?")
             self.network_chain_id.set_text("?")
             self.node_balance.set_text("?")
+        else:
+            try:
+                self.network_block.set_text("#" + str(self.w3.eth.blockNumber))
+                self.network_peers.set_text(str(self.w3.net.peer_count))
+                self.network_chain_id.set_text(str(self.w3.eth.chainId))
+                self.node_balance.set_text(
+                    str(self.w3.fromWei(self.w3.eth.getBalance(self.account.address), "ether")) + "Ξ")
+            except:
+                self.network_block.set_text("?")
+                self.network_peers.set_text("?")
+                self.network_chain_id.set_text("?")
+                self.node_balance.set_text("?")
 
     def shutdown_node(self, button):
         raise urwid.ExitMainLoop()
@@ -119,6 +125,7 @@ class SidePanel(urwid.WidgetWrap):
             'nonce': nonce,
         })
         signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
+        # transaction_hash = signed.hash
         self.w3.eth.sendRawTransaction(signed.rawTransaction)
 
 
@@ -145,29 +152,11 @@ class Display:
         ('title', 'black,bold', 'light gray')
     ]
 
-    def __init__(self, config, w3):
+    def __init__(self, config, w3, account):
         urwid.set_encoding('utf8')
         self.w3 = w3
-
-        print("\n"
-              + elcaro_logo_centered +
-              "\n\n"
-              " !! THIS IS HIGHLY EXPERIMENTAL SOFTWARE AND TO BE USED AT YOUR OWN RISK !!\n"
-              "\n"
-              "     ATTENTION  The private key of the node will be derived from\n"
-              "                the username and the password you enter. That means,\n"
-              "                if you use a weak username-password pair others may\n"
-              "                be able to access the node account.\n"
-              "\n"
-              " !! THIS IS HIGHLY EXPERIMENTAL SOFTWARE AND TO BE USED AT YOUR OWN RISK !!\n")
-
-        username = input(' - Login: ')
-        password = getpass.getpass(' - Password:')
-        m = hashlib.sha256()
-        m.update(argon2.using(salt='elcaro-oracle'.encode("utf-8")).hash(username + password).encode('utf-8'))
-
-        self.account = self.w3.eth.account.from_key(m.digest())
-        self.status = urwid.Text("STATUS")
+        self.account = account
+        self.status = urwid.Text(" [ SYNCING ]")
         self.status = urwid.AttrWrap(self.status, 'footer')
         self.geth_log = ViewTerminal(['tail', '-f', config.geth_log], encoding='utf-8')
         self.side_panel = SidePanel(self.w3, config, self.account)
@@ -189,14 +178,21 @@ class Display:
                                    unhandled_input=self.unhandled_input)
 
     def __del__(self):
-        self.refresh_thread.join()
         print("")
+        self.refresh_thread.join()
 
     def refresh(self):
         while self.running:
+            if self.w3.eth.syncing or self.w3.net.peer_count == 0:
+                self.status.set_text(" [ SYNCING ]")
+            else:
+                self.status.set_text("")
+
             self.side_panel.refresh()
             self.loop.draw_screen()
-            time.sleep(0.5)
+
+            time.sleep(1)
+
         self.done = True
 
     def main(self):
@@ -228,9 +224,26 @@ if '__main__' == __name__:
     parser.add_argument('--elcaro-json', help='path elcaro standard-json compiler artefact',
                         default="/elcaro/contracts/Elcaro.json")
 
+    print("\n"
+          + elcaro_logo_centered +
+          "\n\n"
+          "     ATTENTION  The private key of the node will be derived from\n"
+          "                the username and the password you enter. That means,\n"
+          "                if you use a weak username-password pair others may\n"
+          "                be able to access the node account.\n"
+          "\n"
+          " !! THIS IS HIGHLY EXPERIMENTAL SOFTWARE AND TO BE USED AT YOUR OWN RISK !!\n")
+
+    username = input(' - Login: ')
+    password = getpass.getpass(' - Password:')
+    m = hashlib.sha256()
+    m.update(argon2.using(salt='elcaro-oracle'.encode("utf-8")).hash(username + password).encode('utf-8'))
+
     w3 = Web3(Web3.WebsocketProvider('ws://127.0.0.1:8545'))
     if not w3.isConnected():
         print("error: could not connect to geth node @ ws://127.0.0.1:8545. aborting.")
         exit(1)
 
-    Display(parser.parse_args(), w3).main()
+    account = w3.eth.account.from_key(m.digest())
+
+    Display(parser.parse_args(), w3, account).main()
