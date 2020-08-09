@@ -28,12 +28,13 @@ class ViewTerminal(urwid.Terminal):
 
 
 class SidePanel(urwid.WidgetWrap):
-    def __init__(self, w3, config, account):
+    def __init__(self, w3, config, elcaro):
         self.w3 = w3
         self.contract_json = None
         with open(config.elcaro_json, 'r') as json_file:
             self.contract_json = json.load(json_file)
-        self.account = account
+        self.elcaro = elcaro
+        self.account = elcaro.account
         self.contract = w3.eth.contract(address=config.contract, abi=self.contract_json["abi"])
         self.logo = urwid.Text(elcaro_logo)
         self.network_chain_id = urwid.Text("?", align=urwid.CENTER)
@@ -48,9 +49,13 @@ class SidePanel(urwid.WidgetWrap):
         self.node_responses = urwid.Text("?", align=urwid.CENTER)
         self.node_balance = urwid.Text("?", align=urwid.CENTER)
         self.register_unregister_button = urwid.Button("Register Node", self.register_unregister)
-        self.exit_button = urwid.Button("Shutdown Node", self.shutdown_node)
+        # self.register_unregister_button = urwid.AttrWrap(self.register_unregister_button, 'button normal')
+        self.exit_button = urwid.Button("Shutdown Node", self.elcaro.ask_quit)
+        # self.exit_button = urwid.AttrWrap(self.exit_button, 'button normal')
         self.pile = urwid.Pile([
             self.logo,
+            self.elcaro.status,
+            urwid.Columns([('fixed', 5, urwid.Text("")), self.elcaro.progress_bar, ('fixed', 5, urwid.Text(""))]),
             urwid.Text(""),
             urwid.Columns(
                 [
@@ -89,32 +94,25 @@ class SidePanel(urwid.WidgetWrap):
             self.register_unregister_button,
             urwid.Text(""),
             self.exit_button
-        ], focus_item=12)
+        ], focus_item=14)
         fill = urwid.LineBox(urwid.Filler(self.pile, valign=urwid.TOP))
         fill = urwid.AttrWrap(fill, 'body')
         self.__super.__init__(urwid.AttrWrap(fill, 'chars'))
 
     def refresh(self):
+        self.network_peers.set_text(str(self.w3.net.peer_count))
+        self.network_chain_id.set_text(str(self.w3.eth.chainId))
         if self.w3.eth.syncing or self.w3.net.peer_count == 0:
             self.network_block.set_text("?")
-            self.network_peers.set_text("?")
-            self.network_chain_id.set_text("?")
             self.node_balance.set_text("?")
         else:
             try:
                 self.network_block.set_text("#" + str(self.w3.eth.blockNumber))
-                self.network_peers.set_text(str(self.w3.net.peer_count))
-                self.network_chain_id.set_text(str(self.w3.eth.chainId))
                 self.node_balance.set_text(
                     str(self.w3.fromWei(self.w3.eth.getBalance(self.account.address), "ether")) + "Ξ")
             except:
                 self.network_block.set_text("?")
-                self.network_peers.set_text("?")
-                self.network_chain_id.set_text("?")
                 self.node_balance.set_text("?")
-
-    def shutdown_node(self, button):
-        raise urwid.ExitMainLoop()
 
     def register_unregister(self, button):
         nonce = self.w3.eth.getTransactionCount(self.account.address)
@@ -133,14 +131,14 @@ class Display:
     palette = [
         ('body', 'black', 'light gray', 'standout'),
         ('header', 'white', 'dark red', 'bold'),
-        ('footer', 'white', 'dark red', 'bold'),
+        ('footer', 'black', 'light gray', 'standout'),
         ('button normal', 'light gray', 'dark blue', 'standout'),
         ('button select', 'white', 'dark green'),
         ('button disabled', 'dark gray', 'dark blue'),
         ('edit', 'light gray', 'dark blue'),
         ('bigtext', 'white', 'black'),
         ('chars', 'light gray', 'black'),
-        ('exit', 'white', 'dark cyan'),
+        ('exit', 'black', 'light gray', 'standout'),
         (None, 'light gray', 'black'),
         ('heading', 'black', 'light gray'),
         ('line', 'black', 'light gray'),
@@ -149,29 +147,34 @@ class Display:
         ('focus line', 'black', 'dark red'),
         ('focus options', 'black', 'light gray'),
         ('selected', 'white', 'dark blue'),
-        ('title', 'black,bold', 'light gray')
+        ('title', 'black,bold', 'light gray'),
+        ('pb-en', 'black', 'light gray', ''),
+        ('pb-dis', 'white', 'dark gray', ''),
     ]
 
     def __init__(self, config, w3, account):
         urwid.set_encoding('utf8')
         self.w3 = w3
         self.account = account
-        self.status = urwid.Text(" [ SYNCING ]")
-        self.status = urwid.AttrWrap(self.status, 'footer')
+        self.status = urwid.Text(('title', u" [ SYNCING ]"), align=urwid.CENTER)
+        self.progress_bar = urwid.ProgressBar('pb-en', 'pb-dis', 0, 100)
         self.geth_log = ViewTerminal(['tail', '-f', config.geth_log], encoding='utf-8')
-        self.side_panel = SidePanel(self.w3, config, self.account)
+        self.side_panel = SidePanel(self.w3, config, self)
         self.screen = urwid.Columns(
             [('fixed', 46, self.side_panel), ('weight', 2, urwid.LineBox(self.geth_log, title="geth"))])
         self.screen = urwid.AttrWrap(self.screen, 'body')
-        self.screen = urwid.Frame(footer=self.status, body=self.screen)
+        self.screen = urwid.Frame(body=self.screen)
+        self.background = urwid.Frame(body=urwid.Pile([]))
+        self.background = urwid.AttrWrap(self.background, 'exit')
         fonts = urwid.get_all_fonts()
         for name, fontcls in fonts:
             font = fontcls()
             if fontcls == urwid.HalfBlock5x4Font:
                 self.exit_font = font
-        self.exit = urwid.BigText(('exit', " Quit? "), self.exit_font)
-        self.exit = urwid.Overlay(self.exit, self.screen, 'center', None, 'middle', None)
+        self.exit_overlay = urwid.BigText(('exit', " Shutdown? (y/n)"), self.exit_font)
+        self.exit_overlay = urwid.Overlay(self.exit_overlay, self.background, 'center', None, 'middle', None)
         self.refresh_thread = None
+        self.update_display = True
         self.running = True
         self.done = False
         self.loop = urwid.MainLoop(self.screen, self.palette,
@@ -181,14 +184,24 @@ class Display:
         print("")
         self.refresh_thread.join()
 
+    def ask_quit(self, button):
+        self.update_display = False
+        self.loop.widget = self.exit_overlay
+
     def refresh(self):
         while self.running:
             if self.w3.eth.syncing or self.w3.net.peer_count == 0:
-                self.status.set_text(" [ SYNCING ]")
+                self.status.set_text("SYNCING...")
+                if self.w3.eth.syncing:
+                    self.progress_bar.current = float(self.w3.eth.syncing.currentBlock) / float(
+                        self.w3.eth.syncing.highestBlock) * 100.0
             else:
+                self.progress_bar.current = 100
                 self.status.set_text("")
 
-            self.side_panel.refresh()
+            if self.update_display:
+                self.side_panel.refresh()
+
             self.loop.draw_screen()
 
             time.sleep(1)
@@ -204,14 +217,15 @@ class Display:
 
     def unhandled_input(self, key):
         if key == 'f8':
-            self.loop.widget = self.exit
+            self.ask_quit('q')
             return True
-        if self.loop.widget != self.exit:
+        if self.loop.widget != self.exit_overlay:
             return
         if key in ('y', 'Y'):
             raise urwid.ExitMainLoop()
         if key in ('n', 'N'):
             self.loop.widget = self.screen
+            self.update_display = True
             return True
 
 
