@@ -1,6 +1,9 @@
 import urwid
 import threading
+import queue
 import time
+
+from eth_utils import to_int
 from web3 import Web3
 from passlib.hash import argon2
 import getpass
@@ -27,109 +30,122 @@ class ViewTerminal(urwid.Terminal):
     _selectable = False
 
 
+class EventViewer(urwid.WidgetWrap):
+    def __init__(self, elcaro):
+        self.list = urwid.SimpleListWalker([])
+        self.listbox = urwid.ListBox(self.list)
+        self.body = urwid.AttrWrap(self.listbox, 'body')
+        self.__super.__init__(urwid.AttrWrap(self.body, 'chars'))
+
+
 class SidePanel(urwid.WidgetWrap):
-    def __init__(self, w3, config, elcaro):
-        self.w3 = w3
-        self.contract_json = None
-        with open(config.elcaro_json, 'r') as json_file:
-            self.contract_json = json.load(json_file)
+    def __init__(self, elcaro):
         self.elcaro = elcaro
-        self.account = elcaro.account
-        self.contract = w3.eth.contract(address=config.contract, abi=self.contract_json["abi"])
-        self.logo = urwid.Text(elcaro_logo)
-        self.network_chain_id = urwid.Text("?", align=urwid.CENTER)
-        self.network_peers = urwid.Text("?", align=urwid.CENTER)
-        self.network_block = urwid.Text("?", align=urwid.CENTER)
-        self.active_nodes = urwid.Text("?", align=urwid.CENTER)
-        self.contract_address = urwid.Text(config.contract, align=urwid.CENTER)
-        self.contract_requests = urwid.Text("?", align=urwid.CENTER)
-        self.contract_responses = urwid.Text("?", align=urwid.CENTER)
-        self.node_address = urwid.Text(self.account.address, align=urwid.CENTER)
-        self.node_requests = urwid.Text("?", align=urwid.CENTER)
-        self.node_responses = urwid.Text("?", align=urwid.CENTER)
-        self.node_balance = urwid.Text("?", align=urwid.CENTER)
-        self.register_unregister_button = urwid.Button("Register Node", self.register_unregister)
-        # self.register_unregister_button = urwid.AttrWrap(self.register_unregister_button, 'button normal')
-        self.exit_button = urwid.Button("Shutdown Node", self.elcaro.ask_quit)
-        # self.exit_button = urwid.AttrWrap(self.exit_button, 'button normal')
+        self.logo = urwid.Text(('logo', elcaro_logo))
+        self.network_block_title = urwid.Text(('network title', u"Block..."), align=urwid.CENTER)
+
+        self.network_chain_id = urwid.Text(('network', u"?"), align=urwid.CENTER)
+        self.network_peers = urwid.Text(('network', u"?"), align=urwid.CENTER)
+        self.network_block = urwid.Text(('network', u"?"), align=urwid.CENTER)
+
+        self.active_nodes = urwid.Text(('contract', u"?"), align=urwid.CENTER)
+        self.contract_address = urwid.Text(('contract', self.elcaro.config.contract), align=urwid.CENTER)
+        self.contract_requests = urwid.Text(('contract', u"?"), align=urwid.CENTER)
+        self.contract_responses = urwid.Text(('contract', u"?"), align=urwid.CENTER)
+
+        self.node_address = urwid.Text(('node', self.elcaro.account.address), align=urwid.CENTER)
+        self.node_requests = urwid.Text(('node', u"?"), align=urwid.CENTER)
+        self.node_responses = urwid.Text(('node', u"?"), align=urwid.CENTER)
+        self.node_balance = urwid.Text(('node', u"?"), align=urwid.CENTER)
+
+        self.register_unregister_button = urwid.Button(('button', " Register  "), self.elcaro.register_unregister)
         self.pile = urwid.Pile([
             self.logo,
-            self.elcaro.status,
-            urwid.Columns([('fixed', 5, urwid.Text("")), self.elcaro.progress_bar, ('fixed', 5, urwid.Text(""))]),
-            urwid.Text(""),
             urwid.Columns(
                 [
-                    urwid.Pile([urwid.Text(('title', u"Chain ID"), align=urwid.CENTER),
+                    urwid.Pile([urwid.Text(('network title', u"Chain"), align=urwid.CENTER),
                                 self.network_chain_id]),
-                    urwid.Pile([urwid.Text(('title', u"Peers"), align=urwid.CENTER),
+                    urwid.Pile([urwid.Text(('network title', u"Peers"), align=urwid.CENTER),
                                 self.network_peers]),
-                    urwid.Pile([urwid.Text(('title', u"Block"), align=urwid.CENTER),
+                    urwid.Pile([self.network_block_title,
                                 self.network_block]),
                 ]),
-            urwid.Text(""),
-            urwid.Text(('title', u"Contract"), align=urwid.CENTER),
+            urwid.Text(('contract title', u"Contract"), align=urwid.CENTER),
             self.contract_address,
             urwid.Columns(
                 [
-                    urwid.Pile([urwid.Text(('title', u"Active Nodes"), align=urwid.CENTER),
+                    urwid.Pile([urwid.Text(('contract title', u"Active Nodes"), align=urwid.CENTER),
                                 self.active_nodes]),
-                    urwid.Pile([urwid.Text(('title', u"Requests"), align=urwid.CENTER),
+                    urwid.Pile([urwid.Text(('contract title', u"Requests"), align=urwid.CENTER),
                                 self.contract_requests]),
-                    urwid.Pile([urwid.Text(('title', u"Responses"), align=urwid.CENTER),
+                    urwid.Pile([urwid.Text(('contract title', u"Responses"), align=urwid.CENTER),
                                 self.contract_responses]),
                 ]),
-            urwid.Text(""),
-            urwid.Text(('title', u"Node"), align=urwid.CENTER),
+            urwid.Text(('node title', u"Node"), align=urwid.CENTER),
             self.node_address,
             urwid.Columns(
                 [
-                    urwid.Pile([urwid.Text(('title', u"Balance"), align=urwid.CENTER),
+                    urwid.Pile([urwid.Text(('node title', u"Balance"), align=urwid.CENTER),
                                 self.node_balance]),
-                    urwid.Pile([urwid.Text(('title', u"Requests"), align=urwid.CENTER),
+                    urwid.Pile([urwid.Text(('node title', u"Requests"), align=urwid.CENTER),
                                 self.node_requests]),
-                    urwid.Pile([urwid.Text(('title', u"Responses"), align=urwid.CENTER),
+                    urwid.Pile([urwid.Text(('node title', u"Responses"), align=urwid.CENTER),
                                 self.node_requests]),
-                ]),
+                ],
+            ),
             urwid.Text(""),
-            self.register_unregister_button,
-            urwid.Text(""),
-            self.exit_button
-        ], focus_item=14)
-        fill = urwid.LineBox(urwid.Filler(self.pile, valign=urwid.TOP))
+            urwid.Columns(
+                [
+                    urwid.Button(('button', " F1|Test   "), self.elcaro.test_request),
+                    self.register_unregister_button,
+                    urwid.Button(('button', " F8|Exit   "), self.elcaro.ask_quit),
+                ], focus_column=2
+            ),
+        ], focus_item=9)
+        fill = urwid.Filler(self.pile, valign=urwid.TOP)
         fill = urwid.AttrWrap(fill, 'body')
         self.__super.__init__(urwid.AttrWrap(fill, 'chars'))
 
     def refresh(self):
-        self.network_peers.set_text(str(self.w3.net.peer_count))
-        self.network_chain_id.set_text(str(self.w3.eth.chainId))
-        if self.w3.eth.syncing or self.w3.net.peer_count == 0:
-            self.network_block.set_text("?")
-            self.node_balance.set_text("?")
+        self.network_chain_id.set_text(('network', str(self.elcaro.chain_id)))
+        self.network_peers.set_text(('network', str(self.elcaro.peer_count)))
+        self.network_block.set_text(('network', "#" + str(self.elcaro.current_block)))
+        if self.elcaro.registered is None:
+            self.register_unregister_button._selectable = False
+            self.register_unregister_button.set_label(('button', ""))
         else:
-            try:
-                self.network_block.set_text("#" + str(self.w3.eth.blockNumber))
-                self.node_balance.set_text(
-                    str(self.w3.fromWei(self.w3.eth.getBalance(self.account.address), "ether")) + "Ξ")
-            except:
-                self.network_block.set_text("?")
-                self.node_balance.set_text("?")
+            if self.elcaro.registered:
+                self.register_unregister_button.set_label(('button', " Unregister "))
+            else:
+                self.register_unregister_button.set_label(('button', " Register  "))
 
-    def register_unregister(self, button):
-        nonce = self.w3.eth.getTransactionCount(self.account.address)
-        transaction = self.contract.functions.register().buildTransaction({
-            'chainId': self.w3.eth.chainId,
-            'gas': 70000,
-            'gasPrice': w3.toWei('1', 'gwei'),
-            'nonce': nonce,
-        })
-        signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
-        # transaction_hash = signed.hash
-        self.w3.eth.sendRawTransaction(signed.rawTransaction)
+        if self.elcaro.syncing:
+            self.network_block_title.set_text(('network title', u"Block..."))
+            self.node_balance.set_text(('node', '?'))
+        else:
+            self.network_block_title.set_text(('network title', u"Block"))
+            self.node_balance.set_text(('node', str(self.elcaro.balance) + "Ξ"))
+            self.active_nodes.set_text(('contract', str(self.elcaro.active_nodes)))
 
 
-class Display:
+class Elcaro:
     palette = [
-        ('body', 'black', 'light gray', 'standout'),
+        ('logo', 'yellow,bold', 'black', 'standout'),
+        ('body', 'white', 'black', 'standout'),
+        ('exit', 'yellow', 'black', 'standout'),
+        ('title', 'white,bold', 'black'),
+
+        ('network title', 'yellow,bold', 'black'),
+        ('network', 'yellow', 'black'),
+
+        ('contract title', 'light blue,bold', 'black'),
+        ('contract', 'light blue', 'black'),
+
+        ('node title', 'light red,bold', 'black'),
+        ('node', 'light red', 'black'),
+
+        ('button', 'white', 'dark blue', 'standout'),
+
         ('header', 'white', 'dark red', 'bold'),
         ('footer', 'black', 'light gray', 'standout'),
         ('button normal', 'light gray', 'dark blue', 'standout'),
@@ -138,7 +154,6 @@ class Display:
         ('edit', 'light gray', 'dark blue'),
         ('bigtext', 'white', 'black'),
         ('chars', 'light gray', 'black'),
-        ('exit', 'black', 'light gray', 'standout'),
         (None, 'light gray', 'black'),
         ('heading', 'black', 'light gray'),
         ('line', 'black', 'light gray'),
@@ -147,23 +162,32 @@ class Display:
         ('focus line', 'black', 'dark red'),
         ('focus options', 'black', 'light gray'),
         ('selected', 'white', 'dark blue'),
-        ('title', 'black,bold', 'light gray'),
         ('pb-en', 'black', 'light gray', ''),
         ('pb-dis', 'white', 'dark gray', ''),
     ]
 
-    def __init__(self, config, w3, account):
+    def __init__(self, config, w3, private_key):
         urwid.set_encoding('utf8')
         self.w3 = w3
-        self.account = account
-        self.status = urwid.Text(('title', u" [ SYNCING ]"), align=urwid.CENTER)
-        self.progress_bar = urwid.ProgressBar('pb-en', 'pb-dis', 0, 100)
-        self.geth_log = ViewTerminal(['tail', '-f', config.geth_log], encoding='utf-8')
-        self.side_panel = SidePanel(self.w3, config, self)
-        self.screen = urwid.Columns(
-            [('fixed', 46, self.side_panel), ('weight', 2, urwid.LineBox(self.geth_log, title="geth"))])
-        self.screen = urwid.AttrWrap(self.screen, 'body')
-        self.screen = urwid.Frame(body=self.screen)
+        self.w3lock = threading.Lock()
+        self.transaction_queue = queue.Queue()
+        self.transactions = set()
+        self.config = config
+        self.account = self.w3.eth.account.from_key(private_key.digest())
+        self.contract_json = None
+        with open(self.config.elcaro_json, 'r') as json_file:
+            self.contract_json = json.load(json_file)
+        self.contract = self.w3.eth.contract(address=self.config.contract, abi=self.contract_json["abi"])
+
+        self.chain_id = "?"
+        self.peer_count = 0
+        self.current_block = "?"
+
+        self.active_nodes = 0
+        self.registered = None
+        self.balance = 0
+        self.syncing = True
+
         self.background = urwid.Frame(body=urwid.Pile([]))
         self.background = urwid.AttrWrap(self.background, 'exit')
         fonts = urwid.get_all_fonts()
@@ -171,40 +195,207 @@ class Display:
             font = fontcls()
             if fontcls == urwid.HalfBlock5x4Font:
                 self.exit_font = font
-        self.exit_overlay = urwid.BigText(('exit', " Shutdown? (y/n)"), self.exit_font)
+
+        self.filter_on_register = self.contract.events.onRegister.createFilter(fromBlock="latest")
+        self.filter_on_unregister = self.contract.events.onUnregister.createFilter(fromBlock="latest")
+        self.filter_on_request = self.contract.events.onRequest.createFilter(fromBlock="latest")
+
+        self.view_transaction_text = urwid.Text(('exit', " Exit? (y/n)"))
+        self.view_transaction_overlay = urwid.Overlay(
+            urwid.Filler(
+                urwid.Pile([
+                    self.view_transaction_text,
+                    urwid.Button("  BACK", self.show_main)
+                ])
+            ), self.background, 'center', 66, 'middle', 40)
+
+        self.exit_overlay = urwid.BigText(('exit', " Exit? (y/n)"), self.exit_font)
         self.exit_overlay = urwid.Overlay(self.exit_overlay, self.background, 'center', None, 'middle', None)
+
+        self.geth_log = ViewTerminal(['tail', '-f', config.geth_log], encoding='utf-8')
         self.refresh_thread = None
         self.update_display = True
         self.running = True
         self.done = False
+        self.side_panel = SidePanel(self)
+        self.event_viewer = EventViewer(self)
+        self.body = urwid.Pile([
+            ('weight', 4, self.event_viewer),
+        ], focus_item=0)
+        self.screen = urwid.Pile([
+            urwid.Columns(
+                [('fixed', 44, self.side_panel), ('weight', 1, self.body)]),
+            ('fixed', 6, urwid.LineBox(self.geth_log, title="geth client log")),
+        ])
+        self.screen = urwid.AttrWrap(self.screen, 'body')
+        self.screen = urwid.Frame(body=self.screen)
         self.loop = urwid.MainLoop(self.screen, self.palette,
                                    unhandled_input=self.unhandled_input)
+
+    def on_register(self, event):
+        self.event_viewer.list.append(urwid.Pile([
+            urwid.Text(" "),
+            urwid.Text("  onRegister(node_account=" + str(event['args']['node_account']) +
+                       ", node_count=" + str(event['args']['node_count']) + ")"),
+            urwid.Text(" "),
+        ]))
+        self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        return
+
+    def on_unregister(self, event):
+        self.event_viewer.list.append(urwid.Pile([
+            urwid.Text(" "),
+            urwid.Text("  onUnregister(node_account=" + str(event['args']['node_account']) +
+                       ", node_count=" + str(event['args']['node_count']) + ")"),
+            urwid.Text(" "),
+        ]))
+        self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        return
+
+    def on_request(self, event):
+        self.event_viewer.list.append(urwid.Pile([
+            urwid.Text(" "),
+            urwid.Text("  onRequest: " + str(event)),
+            urwid.Text(" "),
+        ]))
+        self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        return
 
     def __del__(self):
         print("")
         self.refresh_thread.join()
 
+    def show_main(self, button):
+        self.loop.widget = self.screen
+        self.update_display = True
+        return True
+
     def ask_quit(self, button):
         self.update_display = False
         self.loop.widget = self.exit_overlay
 
+    def view_transaction(self, button, transaction):
+        (want_receipt, tx_hash) = transaction
+        self.update_display = False
+        try:
+            if want_receipt:
+                result = self.w3.eth.getTransactionReceipt(tx_hash)
+            else:
+                result = self.w3.eth.getTransaction(tx_hash)
+            self.view_transaction_text.set_text(str(result))
+        except:
+            self.view_transaction_text.set_text(tx_hash.hex())
+
+        self.loop.widget = self.view_transaction_overlay
+
+    def test_request(self, button):
+        self.w3lock.acquire()
+
+        nonce = self.w3.eth.getTransactionCount(self.account.address)
+        action = None
+        transaction = self.contract.functions.test().buildTransaction({
+            'chainId': self.w3.eth.chainId,
+            'gas': 1000000,
+            'gasPrice': w3.toWei('1', 'gwei'),
+            'nonce': nonce,
+        })
+        signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
+        if not (signed.hash in self.transactions):
+            self.transactions.add(signed.hash)
+            try:
+                self.w3.eth.sendRawTransaction(signed.rawTransaction)
+            finally:
+                self.transaction_queue.put(signed.hash)
+                self.event_viewer.list.append(urwid.Pile([
+                    urwid.Text(" "),
+                    urwid.Text("  " + self.config.contract + ".test() → \n    " + signed.hash.hex()),
+                    urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
+                    urwid.Button("  → View Tranaction Recipe ", self.view_transaction, user_data=(True, signed.hash)),
+                    urwid.Divider(),
+                ]), )
+                self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+
+        self.w3lock.release()
+
+    def register_unregister(self, button):
+        self.w3lock.acquire()
+
+        nonce = self.w3.eth.getTransactionCount(self.account.address)
+        action = None
+        transaction = {
+            'chainId': self.w3.eth.chainId,
+            'gas': 1000000,
+            'gasPrice': w3.toWei('1', 'gwei'),
+            'nonce': nonce,
+        }
+        if "Unreg" in button.label:
+            action = "unregister"
+            transaction = self.contract.functions.unregister().buildTransaction(transaction)
+        else:
+            action = "register"
+            transaction = self.contract.functions.register().buildTransaction(transaction)
+        signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
+        if not (signed.hash in self.transactions):
+            self.transactions.add(signed.hash)
+            try:
+                self.w3.eth.sendRawTransaction(signed.rawTransaction)
+            finally:
+                self.transaction_queue.put(signed.hash)
+                self.event_viewer.list.append(urwid.Pile([
+                    urwid.Text(" "),
+                    urwid.Text("  " + self.config.contract + "." + action + "() → \n    " + signed.hash.hex()),
+                    urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
+                    urwid.Button("  → View Tranaction Recipe ", self.view_transaction, user_data=(True, signed.hash)),
+                    urwid.Divider(),
+                ]), )
+                self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+
+        self.w3lock.release()
+
+    def handle_events(self):
+        for event in self.filter_on_register.get_new_entries():
+            self.on_register(event)
+
+        for event in self.filter_on_unregister.get_new_entries():
+            self.on_unregister(event)
+
+        for event in self.filter_on_request.get_new_entries():
+            self.on_request(event)
+
+    def update_data(self):
+        self.syncing = self.w3.eth.syncing
+        self.peer_count = self.w3.net.peer_count
+        self.chain_id = self.w3.eth.chainId
+
+        if self.syncing:
+            self.balance = self.w3.fromWei(0, "ether")
+            self.current_block = self.w3.eth.syncing.currentBlock
+            self.registered = None
+        else:
+            self.current_block = self.w3.eth.blockNumber
+            try:
+                self.balance = self.w3.fromWei(self.w3.eth.getBalance(self.account.address), "ether")
+                self.active_nodes = self.contract.functions.nodeCount().call()
+                self.registered = self.contract.functions.isRegistered(to_int(hexstr=self.account.address)).call()
+            except:
+                self.active_nodes = 0
+                self.balance = 0
+                self.registered = None
+
+                # if self.syncing or (self.peer_count == 0 and self.chain_id != 1337):
+        # else:
+
     def refresh(self):
         while self.running:
-            if self.w3.eth.syncing or self.w3.net.peer_count == 0:
-                self.status.set_text("SYNCING...")
-                if self.w3.eth.syncing:
-                    self.progress_bar.current = float(self.w3.eth.syncing.currentBlock) / float(
-                        self.w3.eth.syncing.highestBlock) * 100.0
-            else:
-                self.progress_bar.current = 100
-                self.status.set_text("")
+            self.w3lock.acquire()
+            self.update_data()
+            self.handle_events()
+            self.w3lock.release()
 
             if self.update_display:
                 self.side_panel.refresh()
-
             self.loop.draw_screen()
-
-            time.sleep(1)
+            time.sleep(0.5)
 
         self.done = True
 
@@ -220,10 +411,11 @@ class Display:
             self.ask_quit('q')
             return True
         if self.loop.widget != self.exit_overlay:
+            self.update_display = True
             return
         if key in ('y', 'Y'):
             raise urwid.ExitMainLoop()
-        if key in ('n', 'N'):
+        else:
             self.loop.widget = self.screen
             self.update_display = True
             return True
@@ -238,8 +430,7 @@ if '__main__' == __name__:
     parser.add_argument('--elcaro-json', help='path elcaro standard-json compiler artefact',
                         default="/elcaro/contracts/Elcaro.json")
 
-    print("\n"
-          + elcaro_logo_centered +
+    print(elcaro_logo_centered +
           "\n\n"
           "     ATTENTION  The private key of the node will be derived from\n"
           "                the username and the password you enter. That means,\n"
@@ -250,14 +441,12 @@ if '__main__' == __name__:
 
     username = input(' - Login: ')
     password = getpass.getpass(' - Password:')
-    m = hashlib.sha256()
-    m.update(argon2.using(salt='elcaro-oracle'.encode("utf-8")).hash(username + password).encode('utf-8'))
+    private_key = hashlib.sha256()
+    private_key.update(argon2.using(salt='elcaro-oracle'.encode("utf-8")).hash(username + password).encode('utf-8'))
 
     w3 = Web3(Web3.WebsocketProvider('ws://127.0.0.1:8545'))
     if not w3.isConnected():
         print("error: could not connect to geth node @ ws://127.0.0.1:8545. aborting.")
         exit(1)
 
-    account = w3.eth.account.from_key(m.digest())
-
-    Display(parser.parse_args(), w3, account).main()
+    Elcaro(parser.parse_args(), w3, private_key).main()
