@@ -20,8 +20,10 @@ RUN apk add go-ipfs geth libffi su-exec tini-static
 
 ENV IPFS_PATH /data/ipfs
 ENV GETH_PATH /data/geth
+ENV EXECUTOR_PATH /data/executor
 
-RUN mkdir -p $IPFS_PATH && mkdir -p $GETH_PATH && adduser -D -h $IPFS_PATH -u 1000 -G users elcaro
+RUN mkdir -p $IPFS_PATH && mkdir -p $GETH_PATH && adduser -D -h $IPFS_PATH -u 1000 -G users elcaro && adduser -D -h $EXECUTOR_PATH -u 1001 -G users executor
+RUN chmod +x /data $IPFS_PATH $GETH_PATH $EXECUTOR_PATH
 
 ENTRYPOINT ["/sbin/tini-static", "--", "/usr/local/bin/entrypoint.sh"]
 # ENTRYPOINT ["/sbin/tini-static", "--", "/bin/sh"]

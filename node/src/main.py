@@ -1,16 +1,15 @@
-import urwid
-import threading
-import queue
-import time
-
-from eth_utils import to_int
-from web3 import Web3
-import eth_abi
-from passlib.hash import argon2
+import argparse
 import getpass
 import hashlib
-import argparse
 import json
+import queue
+import threading
+import time
+
+import eth_abi
+import urwid
+from passlib.hash import argon2
+from web3 import Web3
 
 elcaro_logo = u'         .__\n' \
               '    ____ |  |   ____ _____ _______  ____\n' \
@@ -233,6 +232,7 @@ class Elcaro:
         self.exit_overlay = urwid.Overlay(self.exit_overlay, self.background, 'center', None, 'middle', None)
 
         self.geth_log = ViewTerminal(['tail', '-f', config.geth_log], encoding='utf-8')
+        self.executor_log = ViewTerminal(['tail', '-f', config.executor_log], encoding='utf-8')
         self.refresh_thread = None
         self.update_display = True
         self.running = True
@@ -245,6 +245,7 @@ class Elcaro:
         self.screen = urwid.Pile([
             urwid.Columns(
                 [('fixed', 44, self.side_panel), ('weight', 1, self.body)]),
+            ('fixed', 6, urwid.LineBox(self.executor_log, title="executor")),
             ('fixed', 6, urwid.LineBox(self.geth_log, title="geth")),
         ])
         self.screen = urwid.AttrWrap(self.screen, 'body')
@@ -533,6 +534,7 @@ if '__main__' == __name__:
                         default="0x0000000000000000000000000000000000000000")
     parser.add_argument('--geth-log', help='path to geth logfile', default="/data/geth/geth.log")
     parser.add_argument('--ipfs-log', help='path to ipfs logfile')
+    parser.add_argument('--executor-log', help='path to executor logfile', default="/data/executor/executor.log")
     parser.add_argument('--elcaro-json', help='path elcaro standard-json compiler artefact',
                         default="/elcaro/contracts/Elcaro.json")
 
