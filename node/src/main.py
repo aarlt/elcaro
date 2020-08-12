@@ -5,6 +5,7 @@ import time
 
 from eth_utils import to_int
 from web3 import Web3
+import eth_abi
 from passlib.hash import argon2
 import getpass
 import hashlib
@@ -99,6 +100,7 @@ class SidePanel(urwid.WidgetWrap):
                     urwid.Columns([
                         urwid.Pile([
                             urwid.Button(('button', "One Request"), self.elcaro.test_request),
+                            urwid.Button(('button', "Encoding"), self.elcaro.test_arguments_requests),
                             urwid.Columns([
                                 ('fixed', 4, self.elcaro.n_requests),
                                 urwid.Button(('button', "Req(s)."), self.elcaro.test_n_requests)
@@ -271,9 +273,25 @@ class Elcaro:
         return
 
     def on_request(self, event):
+        # _function, _arguments, _contract, _callback, block.number, tx.origin, msg.sender
+        request_data = eth_abi.decode_abi(["string", "bytes", "address", "string", "uint256", "address", "address"],
+                                          event['args']['data'])
+        function_signature = request_data[0]
+        function_signature = function_signature[function_signature.rfind("/") + 1:]
+        function_argument_types = function_signature[function_signature.find("("):function_signature.rfind(")") + 1]
+        function_argument_data = eth_abi.decode_single(function_argument_types, request_data[1])
         self.event_viewer.list.append(urwid.Pile([
             urwid.Text(" "),
-            urwid.Text("  onRequest: " + event['args']['node_account']),
+            urwid.Text("  onRequest(\n" +
+                       "    node: " + str(event['args']['node_account']) + "\n" +
+                       "    function: " + request_data[0] + "\n" +
+                       "    arguments: " + json.dumps(function_argument_data) + "\n" +
+                       "    contract: " + str(request_data[2]) + "\n" +
+                       "    callback: " + str(request_data[3]) + "\n" +
+                       "    block.number: " + str(request_data[4]) + "\n" +
+                       "    tx.origin: " + str(request_data[5]) + "\n" +
+                       "    msg.sender: " + str(request_data[6]) + "\n"
+                                                                   "  )"),
             urwid.Text(" "),
         ]))
         self.event_viewer.list.focus = len(self.event_viewer.list) - 1
@@ -361,6 +379,36 @@ class Elcaro:
                     self.event_viewer.list.append(urwid.Pile([
                         urwid.Text(" "),
                         urwid.Text("  " + self.config.contract + ".test_n() → \n    " + signed.hash.hex()),
+                        urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
+                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
+                                     user_data=(True, signed.hash)),
+                        urwid.Divider(),
+                    ]), )
+                    self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        finally:
+            self.w3lock.release()
+
+    def test_arguments_requests(self, button):
+        self.w3lock.acquire()
+        try:
+            nonce = self.w3.eth.getTransactionCount(self.account.address)
+            action = None
+            transaction = self.contract.functions.test_arguments().buildTransaction({
+                'chainId': self.w3.eth.chainId,
+                'gas': 4000000,
+                'gasPrice': w3.toWei('1', 'gwei'),
+                'nonce': nonce,
+            })
+            signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
+            if not (signed.hash in self.transactions):
+                self.transactions.add(signed.hash)
+                try:
+                    self.w3.eth.sendRawTransaction(signed.rawTransaction)
+                finally:
+                    self.transaction_queue.put(signed.hash)
+                    self.event_viewer.list.append(urwid.Pile([
+                        urwid.Text(" "),
+                        urwid.Text("  " + self.config.contract + ".test_arguments() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
                         urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),

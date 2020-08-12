@@ -48,6 +48,10 @@ contract Elcaro is Owned {
         return nodes.contains(_id);
     }
 
+    function web3py_hack(string memory _function, bytes memory _arguments, address _contract, string memory _callback, uint256 _blocknumber, address _txorigin, address _msgsender) external returns (bool) {
+        return true;
+    }
+
     function call(string memory _function, bytes calldata _arguments, address _contract, string memory _callback) external payable returns (bool) {
         // ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)
         bytes memory data = abi.encode(_function, _arguments, _contract, _callback, block.number, tx.origin, msg.sender);
@@ -72,14 +76,21 @@ contract Elcaro is Owned {
 
     function test() external payable returns (bool) {
         return this.call(
-            "ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)", abi.encode(1, 2, 3, "Hello"),
+            "ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)", abi.encode("Hello"),
+            address(this), "updateLocation(uint256,uint256)"
+        );
+    }
+
+    function test_arguments() external payable returns (bool) {
+        return this.call(
+            "ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(uint256,uint256,string)", abi.encode(1, 2, "Hello"),
             address(this), "updateLocation(uint256,uint256)"
         );
     }
 
     function test_n(uint256 count) external payable returns (bool) {
         return this.call_n(count,
-            "ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)", abi.encode(1, 2, 3, "Hello"),
+            "ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)", abi.encode("Hello"),
             address(this), "updateLocation(uint256,uint256)"
         );
     }
