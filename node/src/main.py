@@ -96,7 +96,15 @@ class SidePanel(urwid.WidgetWrap):
             urwid.Text(""),
             urwid.Columns(
                 [
-                    urwid.Button(('button', " F1|Test   "), self.elcaro.test_request),
+                    urwid.Columns([
+                        urwid.Pile([
+                            urwid.Button(('button', "One Request"), self.elcaro.test_request),
+                            urwid.Columns([
+                                ('fixed', 4, self.elcaro.n_requests),
+                                urwid.Button(('button', "Req(s)."), self.elcaro.test_n_requests)
+                            ])
+                        ])
+                    ]),
                     self.register_unregister_button,
                     urwid.Button(('button', " F8|Exit   "), self.elcaro.ask_quit),
                 ], focus_column=2
@@ -126,7 +134,7 @@ class SidePanel(urwid.WidgetWrap):
             self.network_block_title.set_text(('network title', u"Block"))
 
         if self.elcaro.balance:
-                self.node_balance.set_text(('node', str(self.elcaro.balance) + "Ξ"))
+            self.node_balance.set_text(('node', str(self.elcaro.balance) + "Ξ"))
         else:
             self.node_balance.set_text(('node', "?"))
 
@@ -217,6 +225,8 @@ class Elcaro:
                 ])
             ), self.background, 'center', 100, 'middle', 70)
 
+        self.n_requests = urwid.Edit('', '21', multiline=False, align=urwid.CENTER)
+
         self.exit_overlay = urwid.BigText(('exit', " Exit? (y/n)"), self.exit_font)
         self.exit_overlay = urwid.Overlay(self.exit_overlay, self.background, 'center', None, 'middle', None)
 
@@ -263,7 +273,7 @@ class Elcaro:
     def on_request(self, event):
         self.event_viewer.list.append(urwid.Pile([
             urwid.Text(" "),
-            urwid.Text("  onRequest: " + str(event)),
+            urwid.Text("  onRequest: " + event['args']['node_account']),
             urwid.Text(" "),
         ]))
         self.event_viewer.list.focus = len(self.event_viewer.list) - 1
@@ -292,7 +302,7 @@ class Elcaro:
                     result = self.w3.eth.getTransactionReceipt(tx_hash)
                 else:
                     result = self.w3.eth.getTransaction(tx_hash)
-                self.view_transaction_text.set_text(str(result))
+                self.view_transaction_text.set_text(str(result['gasUsed']))
             except:
                 self.view_transaction_text.set_text(tx_hash.hex())
         finally:
@@ -322,7 +332,38 @@ class Elcaro:
                         urwid.Text(" "),
                         urwid.Text("  " + self.config.contract + ".test() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
-                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction, user_data=(True, signed.hash)),
+                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
+                                     user_data=(True, signed.hash)),
+                        urwid.Divider(),
+                    ]), )
+                    self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        finally:
+            self.w3lock.release()
+
+    def test_n_requests(self, button):
+        self.w3lock.acquire()
+        try:
+            nonce = self.w3.eth.getTransactionCount(self.account.address)
+            action = None
+            transaction = self.contract.functions.test_n(int(self.n_requests.get_edit_text())).buildTransaction({
+                'chainId': self.w3.eth.chainId,
+                'gas': 4000000,
+                'gasPrice': w3.toWei('1', 'gwei'),
+                'nonce': nonce,
+            })
+            signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
+            if not (signed.hash in self.transactions):
+                self.transactions.add(signed.hash)
+                try:
+                    self.w3.eth.sendRawTransaction(signed.rawTransaction)
+                finally:
+                    self.transaction_queue.put(signed.hash)
+                    self.event_viewer.list.append(urwid.Pile([
+                        urwid.Text(" "),
+                        urwid.Text("  " + self.config.contract + ".test_n() → \n    " + signed.hash.hex()),
+                        urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
+                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
+                                     user_data=(True, signed.hash)),
                         urwid.Divider(),
                     ]), )
                     self.event_viewer.list.focus = len(self.event_viewer.list) - 1
@@ -357,7 +398,8 @@ class Elcaro:
                         urwid.Text(" "),
                         urwid.Text("  " + self.config.contract + "." + action + "() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
-                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction, user_data=(True, signed.hash)),
+                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
+                                     user_data=(True, signed.hash)),
                         urwid.Divider(),
                     ]), )
                     self.event_viewer.list.focus = len(self.event_viewer.list) - 1

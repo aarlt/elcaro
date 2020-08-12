@@ -15,7 +15,8 @@ contract Elcaro is Owned {
     EnumerableSet.AddressSet private nodes;
 
     mapping(bytes32 => address) requests;
-    mapping(bytes32 => EnumerableSet.AddressSet) multi_requests;
+    mapping(bytes32 => address[]) multi_requests;
+//    mapping(bytes32 => EnumerableSet.AddressSet) multi_requests;
 
     constructor() {
     }
@@ -57,15 +58,14 @@ contract Elcaro is Owned {
         return true;
     }
 
-    function callN(uint256 count, string memory _function, bytes calldata _arguments, address _contract, string memory _callback) external payable returns (bool) {
+    function call_n(uint256 count, string memory _function, bytes calldata _arguments, address _contract, string memory _callback) external payable returns (bool) {
         // ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)
         bytes memory data = abi.encode(_function, _arguments, _contract, _callback, block.number, tx.origin, msg.sender);
         bytes32 _hash = keccak256(data);
         for (uint i = 0; i < count; ++i) {
             address _nearestNode = nodes.at((uint256(_hash) + i) % nodes.length());
-            if (multi_requests[_hash].add(_nearestNode)) {
-                emit onRequest(_nearestNode, _hash, data);
-            }
+            multi_requests[_hash].push(_nearestNode);
+            emit onRequest(_nearestNode, _hash, data);
         }
         return true;
     }
@@ -77,8 +77,8 @@ contract Elcaro is Owned {
         );
     }
 
-    function test21() external payable returns (bool) {
-        return this.callN(21,
+    function test_n(uint256 count) external payable returns (bool) {
+        return this.call_n(count,
             "ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)", abi.encode(1, 2, 3, "Hello"),
             address(this), "updateLocation(uint256,uint256)"
         );
