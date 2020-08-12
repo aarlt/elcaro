@@ -43,9 +43,16 @@ module.exports = {
     // options below to some value.
     //
     development: {
-      host: "127.0.0.1",     // Localhost (default: none)
-      port: 8545,            // Standard Ethereum port (default: none)
-      network_id: "*",       // Any network (default: none)
+       host: "127.0.0.1",     // Localhost (default: none)
+       port: 8545,            // Standard Ethereum port (default: none)
+       network_id: "*",       // Any network (default: none)
+    },
+    goerli: {
+      host: "localhost", // Connect to geth on the specified
+      port: 8545,
+      from: "0x72E7861091a57db450335351fe2687A450e5a8BB", // default address to use for any transaction Truffle makes during migrations
+      network_id: 5,  // The goerli testnet
+      gas: 4612388 // Gas limit used for deploys
     }
     // Another network with more advanced options...
     // advanced: {

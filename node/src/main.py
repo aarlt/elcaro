@@ -124,8 +124,16 @@ class SidePanel(urwid.WidgetWrap):
             self.node_balance.set_text(('node', '?'))
         else:
             self.network_block_title.set_text(('network title', u"Block"))
-            self.node_balance.set_text(('node', str(self.elcaro.balance) + "Ξ"))
+
+        if self.elcaro.balance:
+                self.node_balance.set_text(('node', str(self.elcaro.balance) + "Ξ"))
+        else:
+            self.node_balance.set_text(('node', "?"))
+
+        if self.elcaro.active_nodes:
             self.active_nodes.set_text(('contract', str(self.elcaro.active_nodes)))
+        else:
+            self.active_nodes.set_text(('contract', "?"))
 
 
 class Elcaro:
@@ -183,9 +191,9 @@ class Elcaro:
         self.peer_count = 0
         self.current_block = "?"
 
-        self.active_nodes = 0
+        self.active_nodes = None
         self.registered = None
-        self.balance = 0
+        self.balance = None
         self.syncing = True
 
         self.background = urwid.Frame(body=urwid.Pile([]))
@@ -200,14 +208,14 @@ class Elcaro:
         self.filter_on_unregister = self.contract.events.onUnregister.createFilter(fromBlock="latest")
         self.filter_on_request = self.contract.events.onRequest.createFilter(fromBlock="latest")
 
-        self.view_transaction_text = urwid.Text(('exit', " Exit? (y/n)"))
+        self.view_transaction_text = urwid.Text(('exit', ""))
         self.view_transaction_overlay = urwid.Overlay(
             urwid.Filler(
                 urwid.Pile([
                     self.view_transaction_text,
                     urwid.Button("  BACK", self.show_main)
                 ])
-            ), self.background, 'center', 66, 'middle', 40)
+            ), self.background, 'center', 100, 'middle', 70)
 
         self.exit_overlay = urwid.BigText(('exit', " Exit? (y/n)"), self.exit_font)
         self.exit_overlay = urwid.Overlay(self.exit_overlay, self.background, 'center', None, 'middle', None)
@@ -225,7 +233,7 @@ class Elcaro:
         self.screen = urwid.Pile([
             urwid.Columns(
                 [('fixed', 44, self.side_panel), ('weight', 1, self.body)]),
-            ('fixed', 6, urwid.LineBox(self.geth_log, title="geth client log")),
+            ('fixed', 6, urwid.LineBox(self.geth_log, title="geth")),
         ])
         self.screen = urwid.AttrWrap(self.screen, 'body')
         self.screen = urwid.Frame(body=self.screen)
@@ -277,126 +285,134 @@ class Elcaro:
     def view_transaction(self, button, transaction):
         (want_receipt, tx_hash) = transaction
         self.update_display = False
+        self.w3lock.acquire()
         try:
-            if want_receipt:
-                result = self.w3.eth.getTransactionReceipt(tx_hash)
-            else:
-                result = self.w3.eth.getTransaction(tx_hash)
-            self.view_transaction_text.set_text(str(result))
-        except:
-            self.view_transaction_text.set_text(tx_hash.hex())
+            try:
+                if want_receipt:
+                    result = self.w3.eth.getTransactionReceipt(tx_hash)
+                else:
+                    result = self.w3.eth.getTransaction(tx_hash)
+                self.view_transaction_text.set_text(str(result))
+            except:
+                self.view_transaction_text.set_text(tx_hash.hex())
+        finally:
+            self.w3lock.release()
 
         self.loop.widget = self.view_transaction_overlay
 
     def test_request(self, button):
         self.w3lock.acquire()
-
-        nonce = self.w3.eth.getTransactionCount(self.account.address)
-        action = None
-        transaction = self.contract.functions.test().buildTransaction({
-            'chainId': self.w3.eth.chainId,
-            'gas': 1000000,
-            'gasPrice': w3.toWei('1', 'gwei'),
-            'nonce': nonce,
-        })
-        signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
-        if not (signed.hash in self.transactions):
-            self.transactions.add(signed.hash)
-            try:
-                self.w3.eth.sendRawTransaction(signed.rawTransaction)
-            finally:
-                self.transaction_queue.put(signed.hash)
-                self.event_viewer.list.append(urwid.Pile([
-                    urwid.Text(" "),
-                    urwid.Text("  " + self.config.contract + ".test() → \n    " + signed.hash.hex()),
-                    urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
-                    urwid.Button("  → View Tranaction Recipe ", self.view_transaction, user_data=(True, signed.hash)),
-                    urwid.Divider(),
-                ]), )
-                self.event_viewer.list.focus = len(self.event_viewer.list) - 1
-
-        self.w3lock.release()
+        try:
+            nonce = self.w3.eth.getTransactionCount(self.account.address)
+            action = None
+            transaction = self.contract.functions.test().buildTransaction({
+                'chainId': self.w3.eth.chainId,
+                'gas': 1000000,
+                'gasPrice': w3.toWei('1', 'gwei'),
+                'nonce': nonce,
+            })
+            signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
+            if not (signed.hash in self.transactions):
+                self.transactions.add(signed.hash)
+                try:
+                    self.w3.eth.sendRawTransaction(signed.rawTransaction)
+                finally:
+                    self.transaction_queue.put(signed.hash)
+                    self.event_viewer.list.append(urwid.Pile([
+                        urwid.Text(" "),
+                        urwid.Text("  " + self.config.contract + ".test() → \n    " + signed.hash.hex()),
+                        urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
+                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction, user_data=(True, signed.hash)),
+                        urwid.Divider(),
+                    ]), )
+                    self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        finally:
+            self.w3lock.release()
 
     def register_unregister(self, button):
         self.w3lock.acquire()
-
-        nonce = self.w3.eth.getTransactionCount(self.account.address)
-        action = None
-        transaction = {
-            'chainId': self.w3.eth.chainId,
-            'gas': 1000000,
-            'gasPrice': w3.toWei('1', 'gwei'),
-            'nonce': nonce,
-        }
-        if "Unreg" in button.label:
-            action = "unregister"
-            transaction = self.contract.functions.unregister().buildTransaction(transaction)
-        else:
-            action = "register"
-            transaction = self.contract.functions.register().buildTransaction(transaction)
-        signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
-        if not (signed.hash in self.transactions):
-            self.transactions.add(signed.hash)
-            try:
-                self.w3.eth.sendRawTransaction(signed.rawTransaction)
-            finally:
-                self.transaction_queue.put(signed.hash)
-                self.event_viewer.list.append(urwid.Pile([
-                    urwid.Text(" "),
-                    urwid.Text("  " + self.config.contract + "." + action + "() → \n    " + signed.hash.hex()),
-                    urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
-                    urwid.Button("  → View Tranaction Recipe ", self.view_transaction, user_data=(True, signed.hash)),
-                    urwid.Divider(),
-                ]), )
-                self.event_viewer.list.focus = len(self.event_viewer.list) - 1
-
-        self.w3lock.release()
+        try:
+            nonce = self.w3.eth.getTransactionCount(self.account.address)
+            action = None
+            transaction = {
+                'chainId': self.w3.eth.chainId,
+                'gas': 1000000,
+                'gasPrice': w3.toWei('1', 'gwei'),
+                'nonce': nonce,
+            }
+            if "Unreg" in button.label:
+                action = "unregister"
+                transaction = self.contract.functions.unregister().buildTransaction(transaction)
+            else:
+                action = "register"
+                transaction = self.contract.functions.register().buildTransaction(transaction)
+            signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
+            if not (signed.hash in self.transactions):
+                self.transactions.add(signed.hash)
+                try:
+                    self.w3.eth.sendRawTransaction(signed.rawTransaction)
+                finally:
+                    self.transaction_queue.put(signed.hash)
+                    self.event_viewer.list.append(urwid.Pile([
+                        urwid.Text(" "),
+                        urwid.Text("  " + self.config.contract + "." + action + "() → \n    " + signed.hash.hex()),
+                        urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
+                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction, user_data=(True, signed.hash)),
+                        urwid.Divider(),
+                    ]), )
+                    self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        finally:
+            self.w3lock.release()
 
     def handle_events(self):
-        for event in self.filter_on_register.get_new_entries():
-            self.on_register(event)
-
-        for event in self.filter_on_unregister.get_new_entries():
-            self.on_unregister(event)
-
-        for event in self.filter_on_request.get_new_entries():
-            self.on_request(event)
+        self.w3lock.acquire()
+        try:
+            for event in self.filter_on_register.get_new_entries():
+                self.on_register(event)
+            for event in self.filter_on_unregister.get_new_entries():
+                self.on_unregister(event)
+            for event in self.filter_on_request.get_new_entries():
+                self.on_request(event)
+        finally:
+            self.w3lock.release()
 
     def update_data(self):
-        self.syncing = self.w3.eth.syncing
-        self.peer_count = self.w3.net.peer_count
-        self.chain_id = self.w3.eth.chainId
+        self.w3lock.acquire()
+        try:
+            self.syncing = self.w3.eth.syncing
+            self.peer_count = self.w3.net.peer_count
+            self.chain_id = self.w3.eth.chainId
 
-        if self.syncing:
-            self.balance = self.w3.fromWei(0, "ether")
-            self.current_block = self.w3.eth.syncing.currentBlock
-            self.registered = None
-        else:
-            self.current_block = self.w3.eth.blockNumber
-            try:
-                self.balance = self.w3.fromWei(self.w3.eth.getBalance(self.account.address), "ether")
-                self.active_nodes = self.contract.functions.nodeCount().call()
-                self.registered = self.contract.functions.isRegistered(to_int(hexstr=self.account.address)).call()
-            except:
-                self.active_nodes = 0
-                self.balance = 0
+            if self.syncing:
+                self.balance = self.w3.fromWei(0, "ether")
+                self.current_block = self.w3.eth.syncing.currentBlock
                 self.registered = None
+            else:
+                self.current_block = self.w3.eth.blockNumber
+                # basics
+                try:
+                    self.balance = self.w3.fromWei(self.w3.eth.getBalance(self.account.address), "ether")
+                except:
+                    self.balance = None
 
-                # if self.syncing or (self.peer_count == 0 and self.chain_id != 1337):
-        # else:
+                # contract interaction, contract need to be deployed
+                try:
+                    self.active_nodes = self.contract.functions.nodeCount().call()
+                    self.registered = self.contract.functions.isRegistered(self.account.address).call()
+                except:
+                    self.active_nodes = None
+                    self.registered = None
+        finally:
+            self.w3lock.release()
 
     def refresh(self):
         while self.running:
-            self.w3lock.acquire()
             self.update_data()
             self.handle_events()
-            self.w3lock.release()
-
             if self.update_display:
                 self.side_panel.refresh()
             self.loop.draw_screen()
             time.sleep(0.5)
-
         self.done = True
 
     def main(self):
