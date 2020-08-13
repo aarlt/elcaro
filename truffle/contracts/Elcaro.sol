@@ -7,7 +7,7 @@ import "./EnumerableSet.sol";
 
 contract Elcaro is Owned {
     // events
-    event onRequest(address indexed node_account, bytes32 indexed request_hash, bytes data);
+    event onRequest(address indexed node_account, bytes32 indexed request_hash, uint256 index, bytes data);
     event onRegister(address indexed node_account, uint256 node_count);
     event onUnregister(address indexed node_account, uint256 node_count);
 
@@ -58,7 +58,7 @@ contract Elcaro is Owned {
         bytes32 _hash = keccak256(data);
         address _nearestNode = nodes.at(uint256(_hash) % nodes.length());
         requests[_hash] = _nearestNode;
-        emit onRequest(_nearestNode, _hash, data);
+        emit onRequest(_nearestNode, _hash, 0, data);
         return true;
     }
 
@@ -69,7 +69,7 @@ contract Elcaro is Owned {
         for (uint i = 0; i < count; ++i) {
             address _nearestNode = nodes.at((uint256(_hash) + i) % nodes.length());
             multi_requests[_hash].push(_nearestNode);
-            emit onRequest(_nearestNode, _hash, data);
+            emit onRequest(_nearestNode, _hash, i, data);
         }
         return true;
     }

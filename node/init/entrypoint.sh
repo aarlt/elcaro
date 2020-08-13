@@ -2,7 +2,8 @@
 
 mkdir -p ${NODE_ROOT}/data/ipfs
 mkdir -p ${NODE_ROOT}/data/geth
-mkdir -p ${NODE_ROOT}/data/executor
+mkdir -p ${NODE_ROOT}/data/executor/request
+mkdir -p ${NODE_ROOT}/data/executor/response
 
 chmod +x -R ${NODE_ROOT}/data
 touch ${NODE_ROOT}/data/executor/executor.log

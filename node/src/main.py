@@ -161,6 +161,9 @@ class Elcaro:
         ('node title', 'light red,bold', 'black'),
         ('node', 'light red', 'black'),
 
+        ('others', 'light blue', 'black'),
+        ('me', 'light red', 'black'),
+
         ('button', 'white', 'dark blue', 'standout'),
 
         ('header', 'white', 'dark red', 'bold'),
@@ -281,21 +284,42 @@ class Elcaro:
         function_signature = function_signature[function_signature.rfind("/") + 1:]
         function_argument_types = function_signature[function_signature.find("("):function_signature.rfind(")") + 1]
         function_argument_data = eth_abi.decode_single(function_argument_types, request_data[1])
+        request_json = {'node_account': str(event['args']['node_account']),
+                        'request_hash': "0x" + event['args']['request_hash'].hex(),
+                        'index': str(event['args']['index']),
+                        'function': request_data[0], 'arguments': function_argument_data,
+                        'contract': str(request_data[2]), 'callback': str(request_data[3]),
+                        'block.number': str(request_data[4]), 'tx.origin': str(request_data[5]),
+                        'msg.sender': str(request_data[6])}
+
+        request_for = "others"
+        if request_json['node_account'] == self.account.address:
+            request_for = "me"
+
         self.event_viewer.list.append(urwid.Pile([
             urwid.Text(" "),
-            urwid.Text("  onRequest(\n" +
-                       "    node: " + str(event['args']['node_account']) + "\n" +
-                       "    function: " + request_data[0] + "\n" +
-                       "    arguments: " + json.dumps(function_argument_data) + "\n" +
-                       "    contract: " + str(request_data[2]) + "\n" +
-                       "    callback: " + str(request_data[3]) + "\n" +
-                       "    block.number: " + str(request_data[4]) + "\n" +
-                       "    tx.origin: " + str(request_data[5]) + "\n" +
-                       "    msg.sender: " + str(request_data[6]) + "\n"
-                                                                   "  )"),
+            urwid.Text((request_for, "  onRequest(\n" +
+                        "    [ request for: " + request_for + " ]\n" +
+                        "    node_account: " + request_json['node_account'] + "\n" +
+                        "    request_hash: " + request_json['request_hash'] + "\n" +
+                        "    index: " + request_json['index'] + "\n" +
+                        "    function: " + request_json['function'] + "\n" +
+                        "    arguments: " + str(request_json['arguments']) + "\n" +
+                        "    contract: " + request_json['contract'] + "\n" +
+                        "    callback: " + request_json['callback'] + "\n" +
+                        "    block.number: " + request_json['block.number'] + "\n" +
+                        "    tx.origin: " + request_json['tx.origin'] + "\n" +
+                        "    msg.sender: " + request_json['msg.sender'] + "\n" +
+                        "  )")),
             urwid.Text(" "),
         ]))
-        self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+
+        if request_for == "me":
+            with open(self.config.executor_request +
+                      "/" + request_json['request_hash'] + "@" + request_json['index'] + ".json", "w") as outfile:
+                outfile.write(json.dumps(request_json, indent=4))
+
+                self.event_viewer.list.focus = len(self.event_viewer.list) - 1
         return
 
     def __del__(self):
@@ -535,6 +559,10 @@ if '__main__' == __name__:
     parser.add_argument('--geth-log', help='path to geth logfile', default="/data/geth/geth.log")
     parser.add_argument('--ipfs-log', help='path to ipfs logfile')
     parser.add_argument('--executor-log', help='path to executor logfile', default="/data/executor/executor.log")
+    parser.add_argument('--executor-request', help='path to executor request directory',
+                        default="/data/executor/request")
+    parser.add_argument('--executor-response', help='path to executor response directory',
+                        default="/data/executor/response")
     parser.add_argument('--elcaro-json', help='path elcaro standard-json compiler artefact',
                         default="/elcaro/contracts/Elcaro.json")
 
