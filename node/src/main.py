@@ -313,14 +313,12 @@ class Elcaro:
                         "  )")),
             urwid.Text(" "),
         ]))
+        self.event_viewer.list.focus = len(self.event_viewer.list) - 1
 
         if request_for == "me":
             with open(self.config.executor_request +
                       "/" + request_json['request_hash'] + "@" + request_json['index'] + ".json", "w") as outfile:
                 outfile.write(json.dumps(request_json, indent=4))
-
-                self.event_viewer.list.focus = len(self.event_viewer.list) - 1
-        return
 
     def __del__(self):
         print("")
