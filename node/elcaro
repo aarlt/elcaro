@@ -28,3 +28,4 @@ if [ "$1" == "--build-only" ]; then
 fi
 
 docker run --rm -it -v ${NODE_ROOT}/data:/data elcaro:local $@
+# docker run --rm -it  elcaro:local $@
