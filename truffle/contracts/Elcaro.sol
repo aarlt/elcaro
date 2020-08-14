@@ -74,23 +74,44 @@ contract Elcaro is Owned {
         return true;
     }
 
-    function test() external payable returns (bool) {
+    function test_hello_world() external payable returns (bool) {
         return this.call(
-            "ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)", abi.encode("Hello"),
+            "ipfs://Qmat7MMWMt6vthLJXeAngRYyuMGU3Fq1La4Ui8e2yiMLkr/hello_world(string)", abi.encode("Alex"),
             address(this), "updateLocation(uint256,uint256)"
         );
     }
 
-    function test_arguments() external payable returns (bool) {
+    function test_get_uint256() external payable returns (bool) {
         return this.call(
-            "ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(uint256,uint256,string)", abi.encode(1, 2, "Hello"),
+            "ipfs://Qmat7MMWMt6vthLJXeAngRYyuMGU3Fq1La4Ui8e2yiMLkr/get(uint256)", abi.encode(1),
+            address(this), "updateLocation(uint256,uint256)"
+        );
+    }
+
+    function test_get_string() external payable returns (bool) {
+        return this.call(
+            "ipfs://Qmat7MMWMt6vthLJXeAngRYyuMGU3Fq1La4Ui8e2yiMLkr/get(string)", abi.encode("Hello"),
+            address(this), "updateLocation(uint256,uint256)"
+        );
+    }
+
+    function test_get_tuple_uint256_string() external payable returns (bool) {
+        return this.call(
+            "ipfs://Qmat7MMWMt6vthLJXeAngRYyuMGU3Fq1La4Ui8e2yiMLkr/get_tuple(uint256,string)", abi.encode(23, "Hello"),
+            address(this), "updateLocation(uint256,uint256)"
+        );
+    }
+
+    function test_get_tuple_string_uint256() external payable returns (bool) {
+        return this.call(
+            "ipfs://Qmat7MMWMt6vthLJXeAngRYyuMGU3Fq1La4Ui8e2yiMLkr/get_tuple(string,uint256)", abi.encode("Hello", 23),
             address(this), "updateLocation(uint256,uint256)"
         );
     }
 
     function test_n(uint256 count) external payable returns (bool) {
         return this.call_n(count,
-            "ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)", abi.encode("Hello"),
+            "ipfs://Qmat7MMWMt6vthLJXeAngRYyuMGU3Fq1La4Ui8e2yiMLkr/get(uint256)", abi.encode(count),
             address(this), "updateLocation(uint256,uint256)"
         );
     }

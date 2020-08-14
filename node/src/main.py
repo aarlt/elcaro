@@ -356,7 +356,7 @@ class Elcaro:
         try:
             nonce = self.w3.eth.getTransactionCount(self.account.address)
             action = None
-            transaction = self.contract.functions.test().buildTransaction({
+            transaction = self.contract.functions.test_hello_world().buildTransaction({
                 'chainId': self.w3.eth.chainId,
                 'gas': 1000000,
                 'gasPrice': w3.toWei('1', 'gwei'),
@@ -371,7 +371,7 @@ class Elcaro:
                     self.transaction_queue.put(signed.hash)
                     self.event_viewer.list.append(urwid.Pile([
                         urwid.Text(" "),
-                        urwid.Text("  " + self.config.contract + ".test() → \n    " + signed.hash.hex()),
+                        urwid.Text("  " + self.config.contract + ".test_hello_world() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
                         urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
@@ -416,7 +416,7 @@ class Elcaro:
         try:
             nonce = self.w3.eth.getTransactionCount(self.account.address)
             action = None
-            transaction = self.contract.functions.test_arguments().buildTransaction({
+            transaction = self.contract.functions.test_get_tuple_uint256_string().buildTransaction({
                 'chainId': self.w3.eth.chainId,
                 'gas': 4000000,
                 'gasPrice': w3.toWei('1', 'gwei'),
@@ -431,7 +431,8 @@ class Elcaro:
                     self.transaction_queue.put(signed.hash)
                     self.event_viewer.list.append(urwid.Pile([
                         urwid.Text(" "),
-                        urwid.Text("  " + self.config.contract + ".test_arguments() → \n    " + signed.hash.hex()),
+                        urwid.Text(
+                            "  " + self.config.contract + ".test_get_tuple_uint256_string() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
                         urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
