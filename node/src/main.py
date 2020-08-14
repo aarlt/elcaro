@@ -248,7 +248,7 @@ class Elcaro:
         self.screen = urwid.Pile([
             urwid.Columns(
                 [('fixed', 44, self.side_panel), ('weight', 1, self.body)]),
-            ('fixed', 6, urwid.LineBox(self.executor_log, title="executor")),
+            ('fixed', 13, urwid.LineBox(self.executor_log, title="executor")),
             ('fixed', 6, urwid.LineBox(self.geth_log, title="geth")),
         ])
         self.screen = urwid.AttrWrap(self.screen, 'body')
@@ -372,8 +372,8 @@ class Elcaro:
                     self.event_viewer.list.append(urwid.Pile([
                         urwid.Text(" "),
                         urwid.Text("  " + self.config.contract + ".test_hello_world() → \n    " + signed.hash.hex()),
-                        urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
-                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
+                        urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
+                        urwid.Button("  → View Transaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
                         urwid.Divider(),
                     ]), )
@@ -402,8 +402,8 @@ class Elcaro:
                     self.event_viewer.list.append(urwid.Pile([
                         urwid.Text(" "),
                         urwid.Text("  " + self.config.contract + ".test_n() → \n    " + signed.hash.hex()),
-                        urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
-                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
+                        urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
+                        urwid.Button("  → View Transaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
                         urwid.Divider(),
                     ]), )
@@ -433,8 +433,8 @@ class Elcaro:
                         urwid.Text(" "),
                         urwid.Text(
                             "  " + self.config.contract + ".test_get_tuple_uint256_string() → \n    " + signed.hash.hex()),
-                        urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
-                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
+                        urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
+                        urwid.Button("  → View Transaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
                         urwid.Divider(),
                     ]), )
@@ -469,8 +469,8 @@ class Elcaro:
                     self.event_viewer.list.append(urwid.Pile([
                         urwid.Text(" "),
                         urwid.Text("  " + self.config.contract + "." + action + "() → \n    " + signed.hash.hex()),
-                        urwid.Button("  → View Tranaction", self.view_transaction, user_data=(False, signed.hash)),
-                        urwid.Button("  → View Tranaction Recipe ", self.view_transaction,
+                        urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
+                        urwid.Button("  → View Transaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
                         urwid.Divider(),
                     ]), )
