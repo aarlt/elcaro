@@ -5,8 +5,11 @@ mkdir -p ${NODE_ROOT}/data/geth
 mkdir -p ${NODE_ROOT}/data/executor/request
 mkdir -p ${NODE_ROOT}/data/executor/response
 
-chmod +x -R ${NODE_ROOT}/data
-# chown -R executor:users ${NODE_ROOT}/data/executor
+touch /data/ipfs/ipfs.log /data/geth/geth.log /data/executor/executor.log
+chmod 660 /data/geth/geth.log /data/executor/executor.log /data/executor/executor.log
+chown -R executor:users ${NODE_ROOT}/data/executor
+chmod 770 -R ${NODE_ROOT}/data/executor/request ${NODE_ROOT}/data/executor/response
+chown -R elcaro:users ${NODE_ROOT}/data/ipfs ${NODE_ROOT}/data/geth
 
 if [ ! -f  /data/ipfs/datastore_spec ]; then
     /usr/bin/ipfs init > /dev/null
@@ -18,14 +21,10 @@ IPFS=$!
 /usr/bin/geth --datadir /data/geth --ws --wsport 8545 --goerli --syncmode light > /data/geth/geth.log 2>&1 &
 GETH=$!
 
-sleep 3
+sleep 5
 
 su-exec executor python3 /elcaro/executor.py &
 EXECUTOR=$!
-
-sleep 1
-
-chmod 777 -R ${NODE_ROOT}/data
 
 su-exec elcaro python3 /elcaro/main.py $@
 
