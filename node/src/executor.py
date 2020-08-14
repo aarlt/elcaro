@@ -157,7 +157,7 @@ class Script:
         warnings = []
         try:
             if self.request:
-                print(">>> executing " + self.request['request_hash'])
+                logging.info(">>> executing " + self.request['request_hash'])
                 function_url = self.request['function']
                 function_url = urlparse(function_url)
                 protocol = function_url.scheme
@@ -194,7 +194,7 @@ class Script:
             if len(warnings) > 0:
                 response["warnings"] = warnings
 
-        print("response = " + json.dumps(response, indent=4))
+        logging.info("response = " + json.dumps(response, indent=4))
         return response
 
 
@@ -224,7 +224,7 @@ class Executor:
     def exec(self, _request):
         script = Script(_request, self.ipfs)
         result = script.execute()
-        print("result = " + str(result))
+        logging.info("result = " + str(result))
 
 
 class RequestWatcher:
