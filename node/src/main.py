@@ -238,8 +238,9 @@ class Elcaro:
         self.executor_log = ViewTerminal(['tail', '-f', config.executor_log], encoding='utf-8')
         self.refresh_thread = None
         self.update_display = True
-        self.running = True
-        self.done = False
+        self.running = threading.Event()
+        self.running.set()
+        self.done = threading.Event()
         self.side_panel = SidePanel(self)
         self.event_viewer = EventViewer(self)
         self.body = urwid.Pile([
@@ -520,21 +521,21 @@ class Elcaro:
             self.w3lock.release()
 
     def refresh(self):
-        while self.running:
+        while self.running.isSet():
             self.update_data()
             self.handle_events()
             if self.update_display:
                 self.side_panel.refresh()
             self.loop.draw_screen()
             time.sleep(0.5)
-        self.done = True
+        self.done.set()
 
     def main(self):
         self.refresh_thread = threading.Thread(target=self.refresh)
         self.refresh_thread.start()
         self.loop.run()
-        self.done = False
-        self.running = False
+        self.done.clear()
+        self.running.clear()
 
     def unhandled_input(self, key):
         if key == 'f8':

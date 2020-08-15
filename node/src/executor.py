@@ -22,28 +22,27 @@ from watchdog.observers import Observer
 
 
 class Terminator:
-    terminated = False
+    terminated = threading.Event()
 
     def __init__(self):
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
     def exit_gracefully(self, signum, frame):
-        self.terminated = True
+        self.terminated.set()
 
 
 class Script:
     def __init__(self, _request, _ipfs):
         self.ipfs = _ipfs
         self.request = None
+        self.response = None
 
         with open(_request[0]) as f:
             self.request = json.load(f)
 
     @staticmethod
     def setlimits():
-        # Set maximum CPU time to 1 second in child process, after fork() but before exec()
-        print("Setting resource limit in child (pid %d)" % os.getpid())
         resource.setrlimit(resource.RLIMIT_CPU, (1, 1))
         resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
         resource.setrlimit(resource.RLIMIT_NOFILE, (20, 20))
@@ -107,10 +106,6 @@ class Script:
 
         script_file.flush()
 
-        script_content = ""
-        with open(script_file.name, 'r') as reader:
-            script_content = reader.read()
-
         pid = -1
         status = 0
         try:
@@ -157,7 +152,7 @@ class Script:
         warnings = []
         try:
             if self.request:
-                logging.info(">>> executing " + self.request['request_hash'])
+                logging.info("- executing request " + self.request['request_hash'])
                 function_url = self.request['function']
                 function_url = urlparse(function_url)
                 protocol = function_url.scheme
@@ -194,8 +189,8 @@ class Script:
             if len(warnings) > 0:
                 response["warnings"] = warnings
 
-        logging.info("response = " + json.dumps(response, indent=4))
-        return response
+        self.response = response
+        return self.request, self.response
 
 
 class Executor:
@@ -222,9 +217,14 @@ class Executor:
             time.sleep(1)
 
     def exec(self, _request):
-        script = Script(_request, self.ipfs)
-        result = script.execute()
-        logging.info("result = " + str(result))
+        request, response = Script(_request, self.ipfs).execute()
+        result = request
+        result["response"] = response
+        os.remove(_request[0])
+        with open(self.config.response +
+                  "/" + result['request_hash'] + "@" + result['index'] + ".json", "w") as outfile:
+            outfile.write(json.dumps(result, indent=4))
+        logging.info(result)
 
 
 class RequestWatcher:
@@ -264,18 +264,18 @@ if __name__ == '__main__':
                         default='/data/executor/response')
     config = parser.parse_args()
     handler = logging.handlers.WatchedFileHandler(config.log)
-    formatter = logging.Formatter(logging.BASIC_FORMAT)
-    handler.setFormatter(formatter)
     root = logging.getLogger()
     root.setLevel(os.environ.get('LOGLEVEL', 'INFO'))
     root.addHandler(handler)
+
+    logging.info('elcaro oracle executor')
 
     terminator = Terminator()
 
     watcher = RequestWatcher(config)
     executor = Executor(config, watcher.request_queue)
-    while not terminator.terminated:
+    while not terminator.terminated.isSet():
         time.sleep(1)
     del executor
 
-    logging.info('End of the program. I was killed gracefully :)')
+    logging.info('shutdown elcaro oracle executor')

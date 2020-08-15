@@ -48,10 +48,6 @@ contract Elcaro is Owned {
         return nodes.contains(_id);
     }
 
-    function web3py_hack(string memory _function, bytes memory _arguments, address _contract, string memory _callback, uint256 _blocknumber, address _txorigin, address _msgsender) external returns (bool) {
-        return true;
-    }
-
     function call(string memory _function, bytes calldata _arguments, address _contract, string memory _callback) external payable returns (bool) {
         // ipfs://QmZrPf6xunDiwsdbPS33oxiPQoTeztmP6KkWfFPjBjdWH7/location(string)
         bytes memory data = abi.encode(_function, _arguments, _contract, _callback, block.number, tx.origin, msg.sender);
