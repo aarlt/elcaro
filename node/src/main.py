@@ -5,11 +5,14 @@ import json
 import queue
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import eth_abi
 import urwid
 from passlib.hash import argon2
 from web3 import Web3
+
+from watcher import Watcher
 
 elcaro_logo = u'         .__\n' \
               '    ____ |  |   ____ _____ _______  ____\n' \
@@ -194,6 +197,11 @@ class Elcaro:
         self.transactions = set()
         self.config = config
         self.account = self.w3.eth.account.from_key(private_key.digest())
+        self.watcher = Watcher(self.config.executor_response)
+        self.response_thread = threading.Thread(target=self.import_responses,
+                                                args=(),
+                                                daemon=True)
+        self.responder = ThreadPoolExecutor(max_workers=4)
 
         self.contract_json = None
         with open(self.config.elcaro_json, 'r') as json_file:
@@ -261,6 +269,9 @@ class Elcaro:
         ])
         self.screen = urwid.AttrWrap(self.screen, 'body')
         self.screen = urwid.Frame(body=self.screen)
+
+        self.response_thread.start()
+
         self.loop = urwid.MainLoop(self.screen, self.palette,
                                    unhandled_input=self.unhandled_input)
 
@@ -282,6 +293,78 @@ class Elcaro:
             urwid.Text(" "),
         ]))
         self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        return
+
+    def import_responses(self):
+        while not self.done.isSet():
+            while not self.watcher.queue.empty():
+                request = self.watcher.queue.get(True)
+                self.responder.submit(self.create_response, request)
+            time.sleep(1)
+
+    def create_response(self, _response):
+        response = None
+        try:
+            with open(_response) as f:
+                response = json.load(f)
+        except:
+            response = None
+
+        if response is None:
+            return
+
+        self.w3lock.acquire()
+        try:
+            nonce = self.w3.eth.getTransactionCount(self.account.address)
+            request_args = eth_abi.encode_abi(response["argument_types"], response["arguments"])
+            request_data = eth_abi.encode_abi(
+                # _function, _arguments, _contract, _callback, block.number, tx.origin, msg.sender
+                ["string", "bytes", "address", "string", "uint256", "address", "address"],
+                [
+                    response["function"], request_args, response["contract"], response["callback"],
+                    int(response["block.number"]), response["tx.origin"], response["msg.sender"]
+                ]
+            )
+            response_types = response['callback'][response['callback'].find("("):response['callback'].rfind(")") + 1]
+            if response_types.find(",") == -1:
+                response_types = response_types[1:-1]
+            result = response['response']['result']
+            response_data = eth_abi.encode_single(response_types, result)
+            transaction = self.contract.functions.response(
+                request_data, response_data,
+                response['response']['stdout'], response['response']['stderr']).buildTransaction({
+                'chainId': self.w3.eth.chainId,
+                'gas': 4000000,
+                'gasPrice': w3.toWei('1', 'gwei'),
+                'nonce': nonce,
+            })
+            signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
+            if not (signed.hash in self.transactions):
+                self.transactions.add(signed.hash)
+                try:
+                    self.w3.eth.sendRawTransaction(signed.rawTransaction)
+                finally:
+                    self.transaction_queue.put(signed.hash)
+                    self.event_viewer.list.append(urwid.Pile([
+                        urwid.Text(" "),
+                        urwid.Text("  creating response transaction → \n    " + signed.hash.hex()),
+                        urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
+                        urwid.Button("  → View Transaction Recipe ", self.view_transaction,
+                                     user_data=(True, signed.hash)),
+                        urwid.Divider(),
+                    ]), )
+                    self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+
+            self.event_viewer.list.append(urwid.Pile([
+                urwid.Text(" "),
+                urwid.Text(
+                    " response(" + response['request_hash'] + ") = " + json.dumps(response['response'], indent=4)),
+                urwid.Text(" "),
+            ]))
+            self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        finally:
+            self.w3lock.release()
+
         return
 
     def on_request(self, event):
@@ -307,7 +390,9 @@ class Elcaro:
             urwid.Text(" "),
             urwid.Text((request_for, "  onRequest(\n" +
                         "    [ request for: " + request_for + " ]\n" +
-                        "    node_account: " + request_json['node_account'] + "\n" +
+                        "    raw: " + event['args']['data'].hex() + "\n"
+                                                                    "    node_account: " + request_json[
+                            'node_account'] + "\n" +
                         "    request_hash: " + request_json['request_hash'] + "\n" +
                         "    function: " + request_json['function'] + "\n" +
                         "    arguments: " + str(request_json['arguments']) + "\n" +
@@ -577,9 +662,10 @@ class Elcaro:
         while self.running.isSet():
             self.update_data()
             self.handle_events()
-            if self.update_display:
-                self.side_panel.refresh()
-            self.loop.draw_screen()
+            if self.loop.screen.started:
+                if self.update_display:
+                    self.side_panel.refresh()
+                self.loop.draw_screen()
             time.sleep(0.5)
         self.done.set()
 

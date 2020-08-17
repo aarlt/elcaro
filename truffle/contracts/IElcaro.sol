@@ -12,4 +12,7 @@ interface IElcaro {
     // requests
     function request(string memory _function, bytes calldata _arguments, address _contract, string memory _callback) external payable returns (bool);
     function request_n(uint256 count, string memory _function, bytes calldata _arguments, address _contract, string memory _callback) external payable returns (bool);
+
+    // responses
+    function response(bytes memory _request, bytes memory _response, string memory stdout, string memory stderr) external returns (bool);
 }

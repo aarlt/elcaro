@@ -2,11 +2,9 @@
 
 import argparse
 import datetime
-import fnmatch
 import json
 import logging.handlers
 import os
-import queue
 import resource
 import signal
 import subprocess
@@ -17,8 +15,8 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 import ipfshttpclient
-from watchdog.events import PatternMatchingEventHandler
-from watchdog.observers import Observer
+
+from watcher import Watcher
 
 
 class Terminator:
@@ -159,7 +157,7 @@ class Script:
                 content_hash = function_url.netloc
                 function = function_url.path
                 if protocol == 'ipfs':
-                    if not (len(function) > 3 and function[0] == "/" and function.count("/") == 1 and \
+                    if not (len(function) > 3 and function[0] == "/" and function.count("/") == 1 and
                             function.count("(") == 1 and function.count(")")) == 1 and \
                             function.find("(") < function.find(")"):
                         errors.append("function url: parse error: invalid function url")
@@ -230,34 +228,6 @@ class Executor:
         logging.info(result)
 
 
-class RequestWatcher:
-    def __init__(self, config):
-        self.request_queue = queue.Queue()
-        for request in RequestWatcher.find("*.json", config.request):
-            self.request_queue.put(request)
-        self.event_handler = PatternMatchingEventHandler("*.json", "", False, False)
-        self.event_handler.on_created = self.on_created
-        self.observer = Observer()
-        self.observer.schedule(self.event_handler, config.request, recursive=False)
-        self.observer.start()
-
-    @staticmethod
-    def find(pattern, path):
-        result = []
-        for root, dirs, files in os.walk(path):
-            for name in files:
-                if fnmatch.fnmatch(name, pattern):
-                    result.append(os.path.join(root, name))
-        return result
-
-    def __del__(self):
-        self.observer.stop()
-        self.observer.join()
-
-    def on_created(self, event):
-        self.request_queue.put(event.src_path)
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='elcaro oracle executor')
     parser.add_argument('--log', help='path to executor logfile', default='/data/executor/executor.log')
@@ -275,8 +245,8 @@ if __name__ == '__main__':
 
     terminator = Terminator()
 
-    watcher = RequestWatcher(config)
-    executor = Executor(config, watcher.request_queue)
+    watcher = Watcher(config.request)
+    executor = Executor(config, watcher.queue)
     while not terminator.terminated.isSet():
         time.sleep(1)
     del executor
