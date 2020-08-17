@@ -221,8 +221,11 @@ class Executor:
         result = request
         result["response"] = response
         os.remove(_request[0])
+        index = ""
+        if 'index' in result:
+            index = "@" + result['index']
         with open(self.config.response +
-                  "/" + result['request_hash'] + "@" + result['index'] + ".json", "w") as outfile:
+                  "/" + result['request_hash'] + index + ".json", "w") as outfile:
             outfile.write(json.dumps(result, indent=4))
         logging.info(result)
 

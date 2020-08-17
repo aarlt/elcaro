@@ -194,10 +194,16 @@ class Elcaro:
         self.transactions = set()
         self.config = config
         self.account = self.w3.eth.account.from_key(private_key.digest())
+
         self.contract_json = None
         with open(self.config.elcaro_json, 'r') as json_file:
             self.contract_json = json.load(json_file)
         self.contract = self.w3.eth.contract(address=self.config.contract, abi=self.contract_json["abi"])
+
+        self.user_contract = None
+        with open(self.config.user_contract_json, 'r') as json_file:
+            self.user_contract_json = json.load(json_file)
+        self.user_contract = self.w3.eth.contract(address=self.config.user_contract, abi=self.user_contract_json["abi"])
 
         self.chain_id = "?"
         self.peer_count = 0
@@ -219,6 +225,7 @@ class Elcaro:
         self.filter_on_register = self.contract.events.onRegister.createFilter(fromBlock="latest")
         self.filter_on_unregister = self.contract.events.onUnregister.createFilter(fromBlock="latest")
         self.filter_on_request = self.contract.events.onRequest.createFilter(fromBlock="latest")
+        self.filter_on_multi_request = self.contract.events.onMultiRequest.createFilter(fromBlock="latest")
 
         self.view_transaction_text = urwid.Text(('exit', ""))
         self.view_transaction_overlay = urwid.Overlay(
@@ -287,7 +294,6 @@ class Elcaro:
         function_argument_data = eth_abi.decode_single(function_argument_types, request_data[1])
         request_json = {'node_account': str(event['args']['node_account']),
                         'request_hash': "0x" + event['args']['request_hash'].hex(),
-                        'index': str(event['args']['index']),
                         'function': request_data[0], 'arguments': function_argument_data,
                         'contract': str(request_data[2]), 'callback': str(request_data[3]),
                         'block.number': str(request_data[4]), 'tx.origin': str(request_data[5]),
@@ -303,7 +309,51 @@ class Elcaro:
                         "    [ request for: " + request_for + " ]\n" +
                         "    node_account: " + request_json['node_account'] + "\n" +
                         "    request_hash: " + request_json['request_hash'] + "\n" +
+                        "    function: " + request_json['function'] + "\n" +
+                        "    arguments: " + str(request_json['arguments']) + "\n" +
+                        "    contract: " + request_json['contract'] + "\n" +
+                        "    callback: " + request_json['callback'] + "\n" +
+                        "    block.number: " + request_json['block.number'] + "\n" +
+                        "    tx.origin: " + request_json['tx.origin'] + "\n" +
+                        "    msg.sender: " + request_json['msg.sender'] + "\n" +
+                        "  )")),
+            urwid.Text(" "),
+        ]))
+        self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+
+        if request_for == "me":
+            with open(self.config.executor_request +
+                      "/" + request_json['request_hash'] + ".json", "w") as outfile:
+                outfile.write(json.dumps(request_json, indent=4))
+
+    def on_multi_request(self, event):
+        # _function, _arguments, _contract, _callback, block.number, tx.origin, msg.sender
+        request_data = eth_abi.decode_abi(["string", "bytes", "address", "string", "uint256", "address", "address"],
+                                          event['args']['data'])
+        function_signature = request_data[0]
+        function_signature = function_signature[function_signature.rfind("/") + 1:]
+        function_argument_types = function_signature[function_signature.find("("):function_signature.rfind(")") + 1]
+        function_argument_data = eth_abi.decode_single(function_argument_types, request_data[1])
+        request_json = {'node_account': str(event['args']['node_account']),
+                        'request_hash': "0x" + event['args']['request_hash'].hex(),
+                        'index': str(event['args']['index']), 'count': str(event['args']['count']),
+                        'function': request_data[0], 'arguments': function_argument_data,
+                        'contract': str(request_data[2]), 'callback': str(request_data[3]),
+                        'block.number': str(request_data[4]), 'tx.origin': str(request_data[5]),
+                        'msg.sender': str(request_data[6])}
+
+        request_for = "others"
+        if request_json['node_account'] == self.account.address:
+            request_for = "me"
+
+        self.event_viewer.list.append(urwid.Pile([
+            urwid.Text(" "),
+            urwid.Text((request_for, "  onMultiRequest(\n" +
+                        "    [ request for: " + request_for + " ]\n" +
+                        "    node_account: " + request_json['node_account'] + "\n" +
+                        "    request_hash: " + request_json['request_hash'] + "\n" +
                         "    index: " + request_json['index'] + "\n" +
+                        "    count: " + request_json['count'] + "\n" +
                         "    function: " + request_json['function'] + "\n" +
                         "    arguments: " + str(request_json['arguments']) + "\n" +
                         "    contract: " + request_json['contract'] + "\n" +
@@ -344,7 +394,7 @@ class Elcaro:
                     result = self.w3.eth.getTransactionReceipt(tx_hash)
                 else:
                     result = self.w3.eth.getTransaction(tx_hash)
-                self.view_transaction_text.set_text(str(result['gasUsed']))
+                self.view_transaction_text.set_text(str(result))
             except:
                 self.view_transaction_text.set_text(tx_hash.hex())
         finally:
@@ -357,7 +407,7 @@ class Elcaro:
         try:
             nonce = self.w3.eth.getTransactionCount(self.account.address)
             action = None
-            transaction = self.contract.functions.test_hello_world().buildTransaction({
+            transaction = self.user_contract.functions.test_hello_world().buildTransaction({
                 'chainId': self.w3.eth.chainId,
                 'gas': 1000000,
                 'gasPrice': w3.toWei('1', 'gwei'),
@@ -372,7 +422,8 @@ class Elcaro:
                     self.transaction_queue.put(signed.hash)
                     self.event_viewer.list.append(urwid.Pile([
                         urwid.Text(" "),
-                        urwid.Text("  " + self.config.contract + ".test_hello_world() → \n    " + signed.hash.hex()),
+                        urwid.Text(
+                            "  " + self.config.user_contract + ".test_hello_world() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
                         urwid.Button("  → View Transaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
@@ -387,7 +438,7 @@ class Elcaro:
         try:
             nonce = self.w3.eth.getTransactionCount(self.account.address)
             action = None
-            transaction = self.contract.functions.test_n(int(self.n_requests.get_edit_text())).buildTransaction({
+            transaction = self.user_contract.functions.test_n(int(self.n_requests.get_edit_text())).buildTransaction({
                 'chainId': self.w3.eth.chainId,
                 'gas': 4000000,
                 'gasPrice': w3.toWei('1', 'gwei'),
@@ -402,7 +453,7 @@ class Elcaro:
                     self.transaction_queue.put(signed.hash)
                     self.event_viewer.list.append(urwid.Pile([
                         urwid.Text(" "),
-                        urwid.Text("  " + self.config.contract + ".test_n() → \n    " + signed.hash.hex()),
+                        urwid.Text("  " + self.config.user_contract + ".test_n() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
                         urwid.Button("  → View Transaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
@@ -417,7 +468,7 @@ class Elcaro:
         try:
             nonce = self.w3.eth.getTransactionCount(self.account.address)
             action = None
-            transaction = self.contract.functions.test_get_tuple_uint256_string().buildTransaction({
+            transaction = self.user_contract.functions.test_get_tuple_uint256_string().buildTransaction({
                 'chainId': self.w3.eth.chainId,
                 'gas': 4000000,
                 'gasPrice': w3.toWei('1', 'gwei'),
@@ -433,7 +484,7 @@ class Elcaro:
                     self.event_viewer.list.append(urwid.Pile([
                         urwid.Text(" "),
                         urwid.Text(
-                            "  " + self.config.contract + ".test_get_tuple_uint256_string() → \n    " + signed.hash.hex()),
+                            "  " + self.config.user_contract + ".test_get_tuple_uint256_string() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
                         urwid.Button("  → View Transaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
@@ -488,6 +539,8 @@ class Elcaro:
                 self.on_unregister(event)
             for event in self.filter_on_request.get_new_entries():
                 self.on_request(event)
+            for event in self.filter_on_multi_request.get_new_entries():
+                self.on_multi_request(event)
         finally:
             self.w3lock.release()
 
@@ -556,6 +609,8 @@ if '__main__' == __name__:
     parser = argparse.ArgumentParser(description='elcaro oracle node.')
     parser.add_argument('--contract', help='contract address to an elcaro contract',
                         default="0xA38604ED7a5BAcCB55Df394bcC90FA933Da69410")
+    parser.add_argument('--user-contract', help='contract address to an elcaro contract',
+                        default="0x0000000000000000000000000000000000000000")
     parser.add_argument('--geth-log', help='path to geth logfile', default="/data/geth/geth.log")
     parser.add_argument('--ipfs-log', help='path to ipfs logfile')
     parser.add_argument('--executor-log', help='path to executor logfile', default="/data/executor/executor.log")
@@ -565,6 +620,8 @@ if '__main__' == __name__:
                         default="/data/executor/response")
     parser.add_argument('--elcaro-json', help='path elcaro standard-json compiler artefact',
                         default="/elcaro/contracts/Elcaro.json")
+    parser.add_argument('--user-contract-json', help='path user contract standard-json compiler artefact',
+                        default="/elcaro/contracts/UserContract.json")
 
     print(elcaro_logo_centered +
           "\n\n"
