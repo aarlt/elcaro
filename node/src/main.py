@@ -694,9 +694,9 @@ class Elcaro:
 if '__main__' == __name__:
     parser = argparse.ArgumentParser(description='elcaro oracle node.')
     parser.add_argument('--contract', help='contract address to an elcaro contract',
-                        default="0xA38604ED7a5BAcCB55Df394bcC90FA933Da69410")
+                        default="0x8Dc8fE451b1aD92330d828329935e661e0d23977")
     parser.add_argument('--user-contract', help='contract address to an elcaro contract',
-                        default="0x0000000000000000000000000000000000000000")
+                        default="0xc8C1c0EA5F307464C6258B3fBBF2f0F653688eF1")
     parser.add_argument('--geth-log', help='path to geth logfile', default="/data/geth/geth.log")
     parser.add_argument('--ipfs-log', help='path to ipfs logfile')
     parser.add_argument('--executor-log', help='path to executor logfile', default="/data/executor/executor.log")
