@@ -6,6 +6,7 @@ RUN pip3 install --upgrade pip
 ADD src /elcaro
 ADD contracts /elcaro/contracts
 
+RUN pip3 install --upgrade pip
 RUN pip3 install -r /elcaro/requirements.txt
 
 FROM python:alpine
@@ -22,7 +23,8 @@ ENV IPFS_PATH /data/ipfs
 ENV GETH_PATH /data/geth
 ENV EXECUTOR_PATH /data/executor
 
-RUN mkdir -p $IPFS_PATH && mkdir -p $GETH_PATH && adduser -D -h $IPFS_PATH -u 1000 -G users elcaro && adduser -D -h $EXECUTOR_PATH -u 1001 -G users executor
+RUN mkdir -p $IPFS_PATH $GETH_PATH $EXECUTOR_PATH
+RUN adduser -D -h $IPFS_PATH -u 1000 -G users elcaro
 
 ENTRYPOINT ["/sbin/tini-static", "--", "/usr/local/bin/entrypoint.sh"]
 # ENTRYPOINT ["/sbin/tini-static", "--", "/bin/sh"]

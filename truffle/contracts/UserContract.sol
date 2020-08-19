@@ -25,15 +25,15 @@ contract UserContract {
         emit GetUint256(_data);
     }
 
-    function getString(string calldata _data) external {
+    function getString(string memory _data) external {
         emit GetString(_data);
     }
 
-    function getTupleStringUint256(string calldata _data0, uint256 _data1) external {
+    function getTupleStringUint256(string memory _data0, uint256 _data1) external {
         emit GetTupleStringUint256(_data0, _data1);
     }
 
-    function getTupleUint256String(uint256 _data0, string calldata _data1) external {
+    function getTupleUint256String(uint256 _data0, string memory _data1) external {
         emit GetTupleUint256String(_data0, _data1);
     }
 

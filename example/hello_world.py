@@ -6,4 +6,3 @@ def get(number):
 
 def get_tuple(number, name):
     return (number, name)
-

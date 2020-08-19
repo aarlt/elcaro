@@ -2,9 +2,11 @@ import argparse
 import getpass
 import hashlib
 import json
+import os
 import queue
 import threading
 import time
+
 from concurrent.futures import ThreadPoolExecutor
 
 import eth_abi
@@ -233,6 +235,7 @@ class Elcaro:
         self.filter_on_register = self.contract.events.onRegister.createFilter(fromBlock="latest")
         self.filter_on_unregister = self.contract.events.onUnregister.createFilter(fromBlock="latest")
         self.filter_on_request = self.contract.events.onRequest.createFilter(fromBlock="latest")
+        self.filter_on_response = self.contract.events.onResponse.createFilter(fromBlock="latest")
         self.filter_on_multi_request = self.contract.events.onMultiRequest.createFilter(fromBlock="latest")
 
         self.view_transaction_text = urwid.Text(('exit', ""))
@@ -277,20 +280,18 @@ class Elcaro:
 
     def on_register(self, event):
         self.event_viewer.list.append(urwid.Pile([
-            urwid.Text(" "),
             urwid.Text("  onRegister(node_account=" + str(event['args']['node_account']) +
                        ", node_count=" + str(event['args']['node_count']) + ")"),
-            urwid.Text(" "),
+            urwid.Divider(),
         ]))
         self.event_viewer.list.focus = len(self.event_viewer.list) - 1
         return
 
     def on_unregister(self, event):
         self.event_viewer.list.append(urwid.Pile([
-            urwid.Text(" "),
             urwid.Text("  onUnregister(node_account=" + str(event['args']['node_account']) +
                        ", node_count=" + str(event['args']['node_count']) + ")"),
-            urwid.Text(" "),
+            urwid.Divider(),
         ]))
         self.event_viewer.list.focus = len(self.event_viewer.list) - 1
         return
@@ -307,6 +308,7 @@ class Elcaro:
         try:
             with open(_response) as f:
                 response = json.load(f)
+            os.remove(_response)
         except:
             response = None
 
@@ -335,7 +337,7 @@ class Elcaro:
                 response['response']['stdout'], response['response']['stderr']).buildTransaction({
                 'chainId': self.w3.eth.chainId,
                 'gas': 4000000,
-                'gasPrice': w3.toWei('1', 'gwei'),
+                'gasPrice': w3.toWei('2', 'gwei'),
                 'nonce': nonce,
             })
             signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
@@ -346,22 +348,14 @@ class Elcaro:
                 finally:
                     self.transaction_queue.put(signed.hash)
                     self.event_viewer.list.append(urwid.Pile([
-                        urwid.Text(" "),
                         urwid.Text("  creating response transaction → \n    " + signed.hash.hex()),
+                        urwid.Text("  -> " + str(response_types) + ":" + str(result) +" -> " + response_data.hex()),
                         urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
                         urwid.Button("  → View Transaction Recipe ", self.view_transaction,
                                      user_data=(True, signed.hash)),
                         urwid.Divider(),
                     ]), )
                     self.event_viewer.list.focus = len(self.event_viewer.list) - 1
-
-            self.event_viewer.list.append(urwid.Pile([
-                urwid.Text(" "),
-                urwid.Text(
-                    " response(" + response['request_hash'] + ") = " + json.dumps(response['response'], indent=4)),
-                urwid.Text(" "),
-            ]))
-            self.event_viewer.list.focus = len(self.event_viewer.list) - 1
         finally:
             self.w3lock.release()
 
@@ -387,11 +381,9 @@ class Elcaro:
             request_for = "me"
 
         self.event_viewer.list.append(urwid.Pile([
-            urwid.Text(" "),
             urwid.Text((request_for, "  onRequest(\n" +
                         "    [ request for: " + request_for + " ]\n" +
-                        "    raw: " + event['args']['data'].hex() + "\n"
-                                                                    "    node_account: " + request_json[
+                        "    node_account: " + request_json[
                             'node_account'] + "\n" +
                         "    request_hash: " + request_json['request_hash'] + "\n" +
                         "    function: " + request_json['function'] + "\n" +
@@ -402,7 +394,7 @@ class Elcaro:
                         "    tx.origin: " + request_json['tx.origin'] + "\n" +
                         "    msg.sender: " + request_json['msg.sender'] + "\n" +
                         "  )")),
-            urwid.Text(" "),
+            urwid.Divider(),
         ]))
         self.event_viewer.list.focus = len(self.event_viewer.list) - 1
 
@@ -432,7 +424,6 @@ class Elcaro:
             request_for = "me"
 
         self.event_viewer.list.append(urwid.Pile([
-            urwid.Text(" "),
             urwid.Text((request_for, "  onMultiRequest(\n" +
                         "    [ request for: " + request_for + " ]\n" +
                         "    node_account: " + request_json['node_account'] + "\n" +
@@ -447,7 +438,7 @@ class Elcaro:
                         "    tx.origin: " + request_json['tx.origin'] + "\n" +
                         "    msg.sender: " + request_json['msg.sender'] + "\n" +
                         "  )")),
-            urwid.Text(" "),
+            urwid.Divider(),
         ]))
         self.event_viewer.list.focus = len(self.event_viewer.list) - 1
 
@@ -455,6 +446,21 @@ class Elcaro:
             with open(self.config.executor_request +
                       "/" + request_json['request_hash'] + "@" + request_json['index'] + ".json", "w") as outfile:
                 outfile.write(json.dumps(request_json, indent=4))
+
+    def on_response(self, event):
+        self.event_viewer.list.append(urwid.Pile([
+            urwid.Text("  onResponse(node_account=" + str(event['args']['node_account']) +
+                       ", request_hash=0x" + event['args']['request_hash'].hex() +
+                       ", contract_address=" + str(event['args']['contract_address']) +
+                       ", signature='" + str(event['args']['signature']) + "'" +
+                       ", data=0x" + event['args']['data'].hex() +
+                       ", stdout='" + str(event['args']['stdout']) + "'"+
+                       ", stderr='" + str(event['args']['stderr']) + "'"
+                       ),
+            urwid.Divider(),
+        ]))
+        self.event_viewer.list.focus = len(self.event_viewer.list) - 1
+        return
 
     def __del__(self):
         print("")
@@ -495,7 +501,7 @@ class Elcaro:
             transaction = self.user_contract.functions.test_hello_world().buildTransaction({
                 'chainId': self.w3.eth.chainId,
                 'gas': 1000000,
-                'gasPrice': w3.toWei('1', 'gwei'),
+                'gasPrice': w3.toWei('2', 'gwei'),
                 'nonce': nonce,
             })
             signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
@@ -506,7 +512,6 @@ class Elcaro:
                 finally:
                     self.transaction_queue.put(signed.hash)
                     self.event_viewer.list.append(urwid.Pile([
-                        urwid.Text(" "),
                         urwid.Text(
                             "  " + self.config.user_contract + ".test_hello_world() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
@@ -526,7 +531,7 @@ class Elcaro:
             transaction = self.user_contract.functions.test_n(int(self.n_requests.get_edit_text())).buildTransaction({
                 'chainId': self.w3.eth.chainId,
                 'gas': 4000000,
-                'gasPrice': w3.toWei('1', 'gwei'),
+                'gasPrice': w3.toWei('2', 'gwei'),
                 'nonce': nonce,
             })
             signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
@@ -537,7 +542,6 @@ class Elcaro:
                 finally:
                     self.transaction_queue.put(signed.hash)
                     self.event_viewer.list.append(urwid.Pile([
-                        urwid.Text(" "),
                         urwid.Text("  " + self.config.user_contract + ".test_n() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
                         urwid.Button("  → View Transaction Recipe ", self.view_transaction,
@@ -556,7 +560,7 @@ class Elcaro:
             transaction = self.user_contract.functions.test_get_tuple_uint256_string().buildTransaction({
                 'chainId': self.w3.eth.chainId,
                 'gas': 4000000,
-                'gasPrice': w3.toWei('1', 'gwei'),
+                'gasPrice': w3.toWei('2', 'gwei'),
                 'nonce': nonce,
             })
             signed = self.w3.eth.account.sign_transaction(transaction, self.account.key)
@@ -567,7 +571,6 @@ class Elcaro:
                 finally:
                     self.transaction_queue.put(signed.hash)
                     self.event_viewer.list.append(urwid.Pile([
-                        urwid.Text(" "),
                         urwid.Text(
                             "  " + self.config.user_contract + ".test_get_tuple_uint256_string() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
@@ -587,7 +590,7 @@ class Elcaro:
             transaction = {
                 'chainId': self.w3.eth.chainId,
                 'gas': 1000000,
-                'gasPrice': w3.toWei('1', 'gwei'),
+                'gasPrice': w3.toWei('2', 'gwei'),
                 'nonce': nonce,
             }
             if "Unreg" in button.label:
@@ -604,7 +607,6 @@ class Elcaro:
                 finally:
                     self.transaction_queue.put(signed.hash)
                     self.event_viewer.list.append(urwid.Pile([
-                        urwid.Text(" "),
                         urwid.Text("  " + self.config.contract + "." + action + "() → \n    " + signed.hash.hex()),
                         urwid.Button("  → View Transaction", self.view_transaction, user_data=(False, signed.hash)),
                         urwid.Button("  → View Transaction Recipe ", self.view_transaction,
@@ -618,6 +620,9 @@ class Elcaro:
     def handle_events(self):
         self.w3lock.acquire()
         try:
+            if self.syncing:
+                return
+
             for event in self.filter_on_register.get_new_entries():
                 self.on_register(event)
             for event in self.filter_on_unregister.get_new_entries():
@@ -626,6 +631,8 @@ class Elcaro:
                 self.on_request(event)
             for event in self.filter_on_multi_request.get_new_entries():
                 self.on_multi_request(event)
+            for event in self.filter_on_response.get_new_entries():
+                self.on_response(event)
         finally:
             self.w3lock.release()
 
@@ -694,7 +701,7 @@ class Elcaro:
 if '__main__' == __name__:
     parser = argparse.ArgumentParser(description='elcaro oracle node.')
     parser.add_argument('--contract', help='contract address to an elcaro contract',
-                        default="0x8Dc8fE451b1aD92330d828329935e661e0d23977")
+                        default="0x6a1c553b61db4183640707E9DdE365A6c05DF1C3")
     parser.add_argument('--user-contract', help='contract address to an elcaro contract',
                         default="0xc8C1c0EA5F307464C6258B3fBBF2f0F653688eF1")
     parser.add_argument('--geth-log', help='path to geth logfile', default="/data/geth/geth.log")

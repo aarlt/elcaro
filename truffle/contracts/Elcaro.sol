@@ -10,18 +10,8 @@ contract Elcaro is Owned, IElcaro {
     using EnumerableSet for EnumerableSet.AddressSet;
     EnumerableSet.AddressSet private nodes;
 
-    // events
-    event onRequest(address indexed node_account, bytes32 indexed request_hash, bytes data);
-    event onMultiRequest(address indexed node_account, bytes32 indexed request_hash, uint256 index, uint256 count, bytes data);
-    event onRegister(address indexed node_account, uint256 node_count);
-    event onUnregister(address indexed node_account, uint256 node_count);
-    event onResponse(address indexed node_account, bytes32 indexed request_hash, address contract_address, string signature, bytes data, string stdin, string stdout);
-
     mapping(bytes32 => address) requests;
     mapping(bytes32 => address[]) multi_requests;
-
-    constructor() {
-    }
 
     // node management
     function register() external payable override returns (bool) {
@@ -78,7 +68,20 @@ contract Elcaro is Owned, IElcaro {
             (,,address contract_address, string memory  callback,,,) =
                 abi.decode(_request, (string, bytes, address, string, uint256, address, address));
 
-            (bool status,) = contract_address.call(abi.encodeWithSignature(callback, _response));
+            bytes memory data = new bytes(4 + _response.length);
+            bytes4 selector = bytes4(keccak256(bytes(callback)));
+
+            data[0] = selector[0];
+            data[1] = selector[1];
+            data[2] = selector[2];
+            data[3] = selector[3];
+            
+            for (uint i = 0; i < _response.length; ++i) {
+                data[4 + i] = _response[i];
+            }
+
+            // (bool status,) = contract_address.call(abi.encodeWithSignature(callback, _response));
+            (bool status,) = contract_address.call(data);
 
             if (status) {
                 emit onResponse(tx.origin, hash, contract_address, callback, _response, stdout, stderr);

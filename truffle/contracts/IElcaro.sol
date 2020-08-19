@@ -3,6 +3,13 @@ pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 interface IElcaro {
+    // events
+    event onRequest(address indexed node_account, bytes32 indexed request_hash, bytes data);
+    event onMultiRequest(address indexed node_account, bytes32 indexed request_hash, uint256 index, uint256 count, bytes data);
+    event onRegister(address indexed node_account, uint256 node_count);
+    event onUnregister(address indexed node_account, uint256 node_count);
+    event onResponse(address indexed node_account, bytes32 indexed request_hash, address contract_address, string signature, bytes data, string stdout, string stderr);
+
     // node management
     function register() external payable returns (bool);
     function unregister() external returns (bool);

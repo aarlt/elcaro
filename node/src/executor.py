@@ -36,7 +36,7 @@ class Script:
         self.request = None
         self.response = None
 
-        with open(_request[0]) as f:
+        with open(_request) as f:
             self.request = json.load(f)
 
     @staticmethod
@@ -71,14 +71,11 @@ class Script:
 
     def _execute(self, errors):
         response = {}
-
         script_file = tempfile.NamedTemporaryFile()
         script_content = self.ipfs.cat(self.request["content_hash"], length=1024 * 1024).decode()
         if not self._check_script(script_content, errors):
             return response
-
         basedir = os.path.dirname(os.path.realpath(__file__))
-
         with open(basedir + "/exec_prelude.py", 'r') as reader:
             script_file.write(bytes(reader.read(), 'utf-8'))
 
@@ -104,9 +101,14 @@ class Script:
 
         script_file.flush()
 
+        with open(script_file.name, 'r') as reader:
+            full_script = reader.read()
+            response["full_script"] = self.ipfs.add_bytes(full_script.encode('utf-8'))
+
         pid = -1
         status = 0
         try:
+            logging.info("- executing script " + script_file.name)
             process = subprocess.Popen(["python3", script_file.name],
                                        stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE,
@@ -119,6 +121,8 @@ class Script:
             with open(script_file.name + ".result") as f:
                 response.update(json.load(f))
                 os.remove(script_file.name + ".result")
+
+            logging.info("- result = " + json.dumps(response))
 
             if status == 0:
                 execution_context = \
@@ -142,10 +146,10 @@ class Script:
         return response
 
     def execute(self):
+        logging.info("- execute " + str(self.request))
         response = {
             "start": datetime.datetime.now().isoformat()
         }
-
         errors = []
         warnings = []
         try:
@@ -211,14 +215,14 @@ class Executor:
         while not self.terminate.isSet():
             while not self.queue.empty():
                 request = self.queue.get(True)
-                self.executor.submit(self.exec, (request, self.config))
+                self.executor.submit(self.exec, request)
             time.sleep(1)
 
     def exec(self, _request):
         request, response = Script(_request, self.ipfs).execute()
         result = request
         result["response"] = response
-        os.remove(_request[0])
+        os.remove(_request)
         index = ""
         if 'index' in result:
             index = "@" + result['index']
@@ -241,7 +245,9 @@ if __name__ == '__main__':
     root.setLevel(os.environ.get('LOGLEVEL', 'INFO'))
     root.addHandler(handler)
 
-    logging.info('elcaro oracle executor')
+    logging.info('elcaro oracle executor started')
+
+    ipfs = ipfshttpclient.connect('/ip4/127.0.0.1/tcp/5001/http')
 
     terminator = Terminator()
 
@@ -251,4 +257,4 @@ if __name__ == '__main__':
         time.sleep(1)
     del executor
 
-    logging.info('shutdown elcaro oracle executor')
+    logging.info('shutting down elcaro oracle executor...')
