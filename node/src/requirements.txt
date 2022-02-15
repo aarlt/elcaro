@@ -24,7 +24,7 @@ multiaddr==0.0.9
 netaddr==0.8.0
 parsimonious==0.8.1
 passlib==1.7.2
-protobuf==3.12.4
+protobuf==3.15.0
 pycparser==2.20
 pycryptodome==3.9.8
 pyrsistent==0.16.0
